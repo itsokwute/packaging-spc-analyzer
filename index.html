@@ -1,0 +1,2676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advanced Packaging SPC Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* ============================================================
+   Design tokens
+   Palette is drawn from the subject: copper (Cu pillar bumps,
+   RDL traces, TSV fill) against graphite silicon-grey, with a
+   probe-light cyan for measured data.
+   ============================================================ */
+:root{
+  --bg:#0E1116;
+  --panel:#151A21;
+  --panel-2:#1B2129;
+  --panel-3:#222A34;
+  --line:#2A323D;
+  --line-soft:#212832;
+  --text:#E5EAF1;
+  --text-2:#AEBAC9;
+  --muted:#7C8899;
+  --cu:#C4703A;
+  --cu-soft:rgba(196,112,58,.16);
+  --cu-line:rgba(196,112,58,.55);
+  --probe:#5AC8DE;
+  --probe-soft:rgba(90,200,222,.14);
+  --ok:#4FD08A;
+  --warn:#E8B23C;
+  --alert:#FF5F56;
+  --violet:#9B8CFF;
+  --r:10px;
+  --r-sm:6px;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --display:'Space Grotesk','Inter',system-ui,sans-serif;
+  --body:'Inter',system-ui,-apple-system,Segoe UI,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);font-family:var(--body);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+}
+body::before{ /* faint reticle grid, the fab-tool viewport feel */
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(255,255,255,.014) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);
+  background-size:56px 56px;
+}
+h1,h2,h3,h4{font-family:var(--display);font-weight:600;margin:0;letter-spacing:-.01em}
+a{color:var(--probe)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#2C3540;border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#3A4552}
+
+/* ============================================================
+   Shell
+   ============================================================ */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:216px 1fr;min-height:100vh}
+.rail{
+  border-right:1px solid var(--line);background:linear-gradient(180deg,#131820,#10151B);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+}
+.brand{padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+.brand .mark{display:flex;align-items:center;gap:9px}
+.brand .chip{
+  width:24px;height:24px;border-radius:5px;flex:none;
+  background:linear-gradient(135deg,var(--cu),#7E4526);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);position:relative
+}
+.brand .chip::after{
+  content:"";position:absolute;inset:6px;border-radius:2px;
+  border:1px solid rgba(255,255,255,.35)
+}
+.brand h1{font-size:14.5px;line-height:1.15}
+.brand .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin-top:7px}
+.nav{padding:10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1}
+.nav button{
+  all:unset;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);
+  cursor:pointer;color:var(--text-2);font-size:13px;font-weight:500;transition:background .12s,color .12s
+}
+.nav button .idx{font-family:var(--mono);font-size:10px;color:var(--muted);width:14px}
+.nav button:hover{background:var(--panel-2);color:var(--text)}
+.nav button:focus-visible{outline:2px solid var(--probe);outline-offset:-2px}
+.nav button.on{background:var(--panel-3);color:var(--text)}
+.nav button.on .idx{color:var(--cu)}
+.rail-foot{padding:12px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.rail-foot .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
+
+.main{min-width:0;display:flex;flex-direction:column}
+
+/* ---- Signature element: the instrument readout rail ---- */
+.readout{
+  position:sticky;top:0;z-index:20;background:rgba(14,17,22,.92);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);display:flex;align-items:stretch;overflow-x:auto
+}
+.ro{padding:11px 18px;border-right:1px solid var(--line-soft);min-width:104px;flex:none}
+.ro .k{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.ro .v{font-family:var(--mono);font-size:16px;font-weight:500;margin-top:3px;letter-spacing:-.02em}
+.ro .v small{font-size:10px;color:var(--muted);margin-left:3px;letter-spacing:0}
+.ro.grow{flex:1;min-width:180px;border-right:none}
+.ro .v.trim{font-family:var(--display);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.bad{color:var(--alert)} .v.cu{color:var(--cu)}
+
+.view{padding:22px 24px 60px;max-width:1500px;width:100%}
+.view[hidden]{display:none}
+.page-head{margin-bottom:18px}
+.page-head h2{font-size:21px}
+.page-head p{color:var(--muted);margin:6px 0 0;max-width:74ch;font-size:13px}
+
+/* ============================================================
+   Panels & primitives
+   ============================================================ */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:16px}
+.panel > header{
+  display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;
+  padding:13px 16px;border-bottom:1px solid var(--line-soft)
+}
+.panel > header h3{font-size:13.5px}
+.panel > header .hint{font-size:11.5px;color:var(--muted)}
+.panel .body{padding:16px}
+.panel .body.tight{padding:10px 16px 16px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1180px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:820px){.g2,.g3,.g4{grid-template-columns:1fr}.app{grid-template-columns:1fr}.rail{position:static;height:auto}.nav{flex-direction:row;flex-wrap:wrap}}
+
+label.fld{display:block;margin-bottom:12px}
+label.fld > span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+input[type=text],input[type=number],select,textarea{
+  width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+  padding:8px 10px;border-radius:var(--r-sm);font-family:var(--mono);font-size:12.5px
+}
+select{font-family:var(--body);font-size:13px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--probe);box-shadow:0 0 0 3px var(--probe-soft)}
+input[type=range]{width:100%;accent-color:var(--cu)}
+
+.btn{
+  all:unset;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--r-sm);
+  background:var(--panel-3);border:1px solid var(--line);color:var(--text);font-size:12.5px;font-weight:500;
+  cursor:pointer;transition:background .12s,border-color .12s
+}
+.btn:hover{background:#2A333E;border-color:#39434F}
+.btn:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
+.btn.primary{background:var(--cu);border-color:var(--cu);color:#150C06;font-weight:600}
+.btn.primary:hover{background:#D57C43}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 10px;font-size:11.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row > *{min-width:0}
+.spacer{flex:1}
+
+.pill{
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--text-2);background:var(--panel-2)
+}
+.pill.ok{color:var(--ok);border-color:rgba(79,208,138,.35);background:rgba(79,208,138,.1)}
+.pill.warn{color:var(--warn);border-color:rgba(232,178,60,.35);background:rgba(232,178,60,.1)}
+.pill.bad{color:var(--alert);border-color:rgba(255,95,86,.35);background:rgba(255,95,86,.1)}
+.pill.cu{color:var(--cu);border-color:var(--cu-line);background:var(--cu-soft)}
+
+/* metric cards */
+.metrics{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+.metric{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:12px 13px;position:relative;overflow:hidden}
+.metric .k{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.metric .v{font-family:var(--mono);font-size:23px;font-weight:500;margin-top:6px;letter-spacing:-.03em}
+.metric .n{font-size:11px;color:var(--muted);margin-top:3px}
+.metric::after{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--line)}
+.metric.ok::after{background:var(--ok)} .metric.warn::after{background:var(--warn)} .metric.bad::after{background:var(--alert)} .metric.cu::after{background:var(--cu)}
+
+/* tables */
+.tbl-wrap{overflow:auto;max-height:520px;border:1px solid var(--line-soft);border-radius:var(--r-sm)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{
+  position:sticky;top:0;background:var(--panel-3);text-align:left;padding:9px 11px;z-index:2;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-2);
+  border-bottom:1px solid var(--line);white-space:nowrap
+}
+tbody td{padding:8px 11px;border-bottom:1px solid var(--line-soft);font-family:var(--mono);font-size:12px;white-space:nowrap}
+tbody tr:hover td{background:rgba(255,255,255,.02)}
+td.txt,th.txt{font-family:var(--body)}
+.num{text-align:right}
+
+/* charts */
+.chart-box{position:relative;height:300px}
+.chart-box.tall{height:380px}
+.chart-box.short{height:210px}
+.chart-note{font-size:11.5px;color:var(--muted);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap}
+.legend-key{display:inline-flex;align-items:center;gap:6px}
+.legend-key i{width:14px;height:0;border-top:2px solid;display:inline-block}
+
+/* toggles */
+.rule{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line-soft);border-radius:var(--r-sm);background:var(--panel-2)}
+.rule .meta{flex:1;min-width:0}
+.rule .meta b{font-size:12.5px;font-weight:600;display:block}
+.rule .meta span{font-size:11.5px;color:var(--muted)}
+.rule .count{font-family:var(--mono);font-size:13px;flex:none}
+.switch{position:relative;width:34px;height:19px;flex:none;margin-top:2px}
+.switch input{opacity:0;width:100%;height:100%;margin:0;cursor:pointer;position:absolute;z-index:2}
+.switch i{position:absolute;inset:0;background:var(--panel-3);border:1px solid var(--line);border-radius:20px;transition:background .15s}
+.switch i::after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+.switch input:checked + i{background:var(--cu-soft);border-color:var(--cu-line)}
+.switch input:checked + i::after{transform:translateX(15px);background:var(--cu)}
+.switch input:focus-visible + i{box-shadow:0 0 0 3px var(--probe-soft)}
+
+/* dropzone */
+.drop{
+  border:1.5px dashed var(--line);border-radius:var(--r);padding:26px 20px;text-align:center;
+  background:var(--panel-2);transition:border-color .15s,background .15s;cursor:pointer
+}
+.drop:hover,.drop.over{border-color:var(--cu);background:rgba(196,112,58,.06)}
+.drop h4{font-size:13.5px;margin-bottom:5px}
+.drop p{margin:0;color:var(--muted);font-size:12px}
+.drop input{display:none}
+
+.note{font-size:12px;color:var(--muted);line-height:1.6}
+.note code{font-family:var(--mono);font-size:11.5px;background:var(--panel-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line-soft)}
+.empty{padding:34px 20px;text-align:center;color:var(--muted);font-size:13px}
+.bar{height:6px;background:var(--panel-3);border-radius:4px;overflow:hidden;margin-top:7px}
+.bar i{display:block;height:100%;background:var(--cu);border-radius:4px;transition:width .3s}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:100;
+  background:var(--panel-3);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:10px 16px;font-size:12.5px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.bad{border-color:rgba(255,95,86,.5)}
+
+/* FMEA */
+.fmea-in{background:transparent;border:1px solid transparent;padding:5px 6px;border-radius:4px;font-family:var(--body);font-size:12.5px;width:100%;min-width:120px}
+.fmea-in:hover{border-color:var(--line)}
+.sod{width:56px;text-align:center;font-family:var(--mono)}
+.rpn{font-family:var(--mono);font-weight:600;text-align:center;border-radius:4px;padding:4px 6px;display:inline-block;min-width:44px}
+.rpn.lo{background:rgba(79,208,138,.14);color:var(--ok)}
+.rpn.mid{background:rgba(232,178,60,.14);color:var(--warn)}
+.rpn.hi{background:rgba(255,95,86,.14);color:var(--alert)}
+.icon-btn{all:unset;cursor:pointer;color:var(--muted);padding:4px 7px;border-radius:4px;font-family:var(--mono)}
+.icon-btn:hover{color:var(--alert);background:rgba(255,95,86,.1)}
+.icon-btn:focus-visible{outline:2px solid var(--probe)}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark"><span class="chip"></span><h1>SPC Analyzer</h1></div>
+      <div class="sub">Advanced Packaging · PI</div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-view="data" class="on"><span class="idx">01</span>Data &amp; limits</button>
+      <button data-view="charts"><span class="idx">02</span>Control charts</button>
+      <button data-view="cap"><span class="idx">03</span>Capability</button>
+      <button data-view="rules"><span class="idx">04</span>Rule violations</button>
+      <button data-view="doe"><span class="idx">05</span>DOE</button>
+      <button data-view="compare"><span class="idx">06</span>Before vs after</button>
+      <button data-view="forecast"><span class="idx">07</span>Trend &amp; roadmap</button>
+      <button data-view="fmea"><span class="idx">08</span>FMEA</button>
+    </nav>
+    <div class="rail-foot"><span class="dot"></span>Runs entirely in this browser. Files are never uploaded.</div>
+  </aside>
+
+  <div class="main">
+    <div class="readout" id="readout">
+      <div class="ro grow"><div class="k">Parameter</div><div class="v trim" id="ro-param">—</div></div>
+      <div class="ro"><div class="k">Points</div><div class="v" id="ro-n">0</div></div>
+      <div class="ro"><div class="k">Mean</div><div class="v" id="ro-mean">—</div></div>
+      <div class="ro"><div class="k">Sigma (within)</div><div class="v" id="ro-sigma">—</div></div>
+      <div class="ro"><div class="k">Cpk</div><div class="v" id="ro-cpk">—</div></div>
+      <div class="ro"><div class="k">Out of control</div><div class="v" id="ro-ooc">—</div></div>
+    </div>
+
+    <!-- 01 DATA -->
+    <section class="view" id="view-data">
+      <div class="page-head">
+        <h2>Data &amp; limits</h2>
+        <p>Load a CSV or Excel export from your metrology or test data, tell the app which column is which, then set spec limits for the parameter you want to analyze.</p>
+      </div>
+      <div class="grid g2">
+        <div class="panel">
+          <header><h3>Load measurement data</h3><span class="hint" id="load-hint">Nothing loaded yet</span></header>
+          <div class="body">
+            <div class="drop" id="drop-a" tabindex="0" role="button" aria-label="Choose a CSV or Excel file">
+              <input type="file" id="file-a" accept=".csv,.txt,.xlsx,.xls">
+              <h4>Drop a file here, or click to choose</h4>
+              <p>CSV, XLSX or XLS · one row per measurement · handles 50,000+ rows</p>
+            </div>
+            <div class="bar" id="load-bar" hidden><i style="width:0"></i></div>
+            <div class="row" style="margin-top:14px">
+              <button class="btn primary" id="btn-sample">Load sample dataset</button>
+              <button class="btn ghost" id="btn-stress">Generate 50,000 rows</button>
+              <span class="spacer"></span>
+              <button class="btn ghost sm" id="btn-template">Download blank template</button>
+            </div>
+            <p class="note" style="margin-top:12px">The sample set covers ten advanced packaging parameters across 12 lots and 3 tools, with process factors attached for DOE.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <header><h3>Column mapping</h3><span class="hint">Pick what each column means</span></header>
+          <div class="body">
+            <div class="grid g2">
+              <label class="fld"><span>Measured parameter</span><select id="map-value"></select></label>
+              <label class="fld"><span>Subgroup / lot (for Xbar-R)</span><select id="map-group"></select></label>
+              <label class="fld"><span>Time or sequence</span><select id="map-order"></select></label>
+              <label class="fld"><span>Filter by (optional)</span><select id="map-filter"></select></label>
+            </div>
+            <label class="fld" id="filter-val-wrap" hidden><span>Keep only</span><select id="map-filter-val"></select></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header>
+          <h3>Specification limits</h3>
+          <span class="hint">Stored per parameter, so switching columns keeps each set of limits</span>
+        </header>
+        <div class="body">
+          <div class="grid g4">
+            <label class="fld"><span>Lower spec limit (LSL)</span><input type="number" id="spec-lsl" step="any" placeholder="none"></label>
+            <label class="fld"><span>Target</span><input type="number" id="spec-tgt" step="any" placeholder="none"></label>
+            <label class="fld"><span>Upper spec limit (USL)</span><input type="number" id="spec-usl" step="any" placeholder="none"></label>
+            <label class="fld"><span>Units</span><input type="text" id="spec-unit" placeholder="µm"></label>
+          </div>
+          <div class="row">
+            <button class="btn sm" id="btn-spec-suggest">Suggest from data (mean ± 4σ)</button>
+            <button class="btn sm ghost" id="btn-spec-clear">Clear limits</button>
+            <span class="spacer"></span>
+            <span class="pill cu" id="spec-state">No limits set</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header><h3>Data preview</h3><span class="hint" id="preview-hint">—</span></header>
+        <div class="body tight"><div class="tbl-wrap" id="preview"><div class="empty">Load a file or the sample dataset to begin.</div></div></div>
+      </div>
+    </section>
+
+    <!-- 02 CHARTS -->
+    <section class="view" id="view-charts" hidden>
+      <div class="page-head">
+        <h2>Control charts</h2>
+        <p>Zone lines mark ±1σ, ±2σ and ±3σ around the center line. Sigma is estimated from the average moving range (MR&#772;/1.128) so it reflects short-term, within-process variation.</p>
+      </div>
+      <div class="panel">
+        <header>
+          <h3>Chart settings</h3>
+          <div class="row">
+            <label class="fld" style="margin:0"><span>Subgroup size (Xbar-R)</span><input type="number" id="cfg-sub" min="2" max="25" value="5" style="width:90px"></label>
+            <label class="fld" style="margin:0"><span>EWMA lambda</span><input type="number" id="cfg-lambda" min="0.05" max="1" step="0.05" value="0.2" style="width:90px"></label>
+            <label class="fld" style="margin:0"><span>CUSUM k (σ)</span><input type="number" id="cfg-k" min="0.1" max="2" step="0.1" value="0.5" style="width:90px"></label>
+            <label class="fld" style="margin:0"><span>CUSUM h (σ)</span><input type="number" id="cfg-h" min="1" max="10" step="0.5" value="4" style="width:90px"></label>
+            <label class="fld" style="margin:0"><span>Show</span>
+              <select id="cfg-zones" style="width:170px">
+                <option value="bands">Shaded zones</option>
+                <option value="lines">Zone lines only</option>
+                <option value="none">Control limits only</option>
+              </select>
+            </label>
+          </div>
+        </header>
+      </div>
+      <div class="panel"><header><h3>Individuals (I) chart</h3><span class="hint" id="i-hint">—</span></header>
+        <div class="body"><div class="chart-box tall"><canvas id="c-i"></canvas></div>
+        <div class="chart-note">
+          <span class="legend-key"><i style="border-color:#5AC8DE"></i>Measurement</span>
+          <span class="legend-key"><i style="border-color:#C4703A"></i>Center line</span>
+          <span class="legend-key"><i style="border-color:#FF5F56"></i>Control limits (±3σ)</span>
+          <span class="legend-key"><i style="border-color:#9B8CFF;border-top-style:dashed"></i>Spec limits</span>
+        </div></div>
+      </div>
+      <div class="panel"><header><h3>Moving range (MR) chart</h3><span class="hint" id="mr-hint">—</span></header>
+        <div class="body"><div class="chart-box"><canvas id="c-mr"></canvas></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>CUSUM</h3><span class="hint" id="cusum-hint">—</span></header>
+          <div class="body"><div class="chart-box"><canvas id="c-cusum"></canvas></div></div></div>
+        <div class="panel"><header><h3>EWMA</h3><span class="hint" id="ewma-hint">—</span></header>
+          <div class="body"><div class="chart-box"><canvas id="c-ewma"></canvas></div></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>Xbar chart</h3><span class="hint" id="xbar-hint">—</span></header>
+          <div class="body"><div class="chart-box"><canvas id="c-xbar"></canvas></div></div></div>
+        <div class="panel"><header><h3>R chart</h3><span class="hint" id="r-hint">—</span></header>
+          <div class="body"><div class="chart-box"><canvas id="c-r"></canvas></div></div></div>
+      </div>
+    </section>
+
+    <!-- 03 CAPABILITY -->
+    <section class="view" id="view-cap" hidden>
+      <div class="page-head">
+        <h2>Process capability</h2>
+        <p>Cp and Cpk use within-subgroup sigma (short-term). Pp and Ppk use the overall sample standard deviation (long-term, what the customer actually sees).</p>
+      </div>
+      <div class="panel"><header><h3>Indices</h3><span class="hint" id="cap-hint">—</span></header>
+        <div class="body"><div class="metrics" id="cap-metrics"></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>Distribution vs specification</h3></header>
+          <div class="body"><div class="chart-box tall"><canvas id="c-hist"></canvas></div></div></div>
+        <div class="panel"><header><h3>Descriptive statistics</h3></header>
+          <div class="body tight"><div class="tbl-wrap" style="max-height:400px"><table id="tbl-desc"></table></div></div></div>
+      </div>
+      <div class="panel"><header><h3>Capability by subgroup</h3><span class="hint">Cpk computed within each lot or subgroup, using the current spec limits</span></header>
+        <div class="body"><div class="chart-box"><canvas id="c-capgrp"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- 04 RULES -->
+    <section class="view" id="view-rules" hidden>
+      <div class="page-head">
+        <h2>Western Electric rule violations</h2>
+        <p>Turn rules on or off to match your site's SPC procedure. Counts and the flagged-point overlay on the I chart update immediately.</p>
+      </div>
+      <div class="panel"><header><h3>Rule set</h3>
+        <div class="row"><button class="btn sm ghost" id="btn-rules-all">Enable all</button><button class="btn sm ghost" id="btn-rules-none">Disable all</button><button class="btn sm ghost" id="btn-rules-std">Standard 4</button></div>
+      </header>
+        <div class="body"><div class="grid g2" id="rule-list"></div></div>
+      </div>
+      <div class="panel"><header><h3>Individuals chart with flagged points</h3><span class="hint" id="irules-hint">—</span></header>
+        <div class="body"><div class="chart-box tall"><canvas id="c-i-rules"></canvas></div></div>
+      </div>
+      <div class="panel"><header><h3>Flagged points</h3><span class="hint" id="viol-hint">—</span>
+        <button class="btn sm ghost" id="btn-viol-export">Export violations (CSV)</button>
+      </header>
+        <div class="body tight"><div class="tbl-wrap" id="viol-table"><div class="empty">No violations to show.</div></div></div>
+      </div>
+    </section>
+
+    <!-- 05 DOE -->
+    <section class="view" id="view-doe" hidden>
+      <div class="page-head">
+        <h2>Design of experiments</h2>
+        <p>Analyze factors already present in your data, or generate a fresh full or fractional factorial design to run on the line.</p>
+      </div>
+      <div class="panel"><header><h3>Analyze factors in the loaded data</h3><span class="hint">Pick a response and up to six factor columns</span></header>
+        <div class="body">
+          <div class="grid g2">
+            <label class="fld"><span>Response</span><select id="doe-resp"></select></label>
+            <label class="fld"><span>Factors (ctrl-click for several)</span><select id="doe-factors" multiple size="6"></select></label>
+          </div>
+          <div class="row"><button class="btn primary" id="btn-doe-run">Run analysis</button>
+            <label class="fld" style="margin:0"><span>Interaction plot</span>
+              <div class="row" style="gap:6px"><select id="doe-ia" style="width:150px"></select><select id="doe-ib" style="width:150px"></select></div>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="doe-out" hidden>
+        <header><h3>Main effects</h3><span class="hint" id="doe-hint">—</span></header>
+        <div class="body"><div class="grid g3" id="doe-charts"></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel" id="doe-pareto-panel" hidden><header><h3>Effect size (Pareto)</h3></header>
+          <div class="body"><div class="chart-box"><canvas id="c-pareto"></canvas></div></div></div>
+        <div class="panel" id="doe-ia-panel" hidden><header><h3>Interaction</h3><span class="hint" id="ia-hint">—</span></header>
+          <div class="body"><div class="chart-box"><canvas id="c-ia"></canvas></div></div></div>
+      </div>
+      <div class="panel"><header><h3>Design generator</h3><span class="hint">Build a run sheet before you go to the line</span></header>
+        <div class="body">
+          <div class="grid g4">
+            <label class="fld"><span>Number of factors (k)</span><input type="number" id="dg-k" min="2" max="7" value="4"></label>
+            <label class="fld"><span>Design</span><select id="dg-type"></select></label>
+            <label class="fld"><span>Center points</span><input type="number" id="dg-center" min="0" max="10" value="0"></label>
+            <label class="fld"><span>Replicates</span><input type="number" id="dg-rep" min="1" max="5" value="1"></label>
+          </div>
+          <div id="dg-names" class="grid g4"></div>
+          <div class="row" style="margin-top:6px">
+            <button class="btn primary" id="btn-dg">Generate design</button>
+            <button class="btn ghost" id="btn-dg-export">Download run sheet (CSV)</button>
+            <span class="spacer"></span><span class="pill" id="dg-res">—</span>
+          </div>
+          <div class="tbl-wrap" style="margin-top:14px;max-height:420px" id="dg-table"><div class="empty">No design generated yet.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 COMPARE -->
+    <section class="view" id="view-compare" hidden>
+      <div class="page-head">
+        <h2>Before vs after</h2>
+        <p>Load a second file — a later split, a different tool, or post-improvement data — and compare violation counts, capability and centering against the first.</p>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>Before (dataset A)</h3><span class="pill cu" id="cmp-a-name">—</span></header>
+          <div class="body"><p class="note">This is whatever is loaded on the Data screen.</p></div></div>
+        <div class="panel"><header><h3>After (dataset B)</h3><span class="pill" id="cmp-b-name">Not loaded</span></header>
+          <div class="body">
+            <div class="drop" id="drop-b" tabindex="0" role="button" aria-label="Choose the after file">
+              <input type="file" id="file-b" accept=".csv,.txt,.xlsx,.xls">
+              <h4>Drop the "after" file here</h4>
+              <p>Must contain the same parameter column name</p>
+            </div>
+            <div class="row" style="margin-top:12px"><button class="btn sm" id="btn-sample-b">Use shifted sample data</button><button class="btn sm ghost" id="btn-split">Split dataset A in half</button></div>
+          </div></div>
+      </div>
+      <div class="panel"><header><h3>Comparison</h3><span class="hint" id="cmp-hint">—</span></header>
+        <div class="body tight"><div class="tbl-wrap" id="cmp-table"><div class="empty">Load a second dataset to compare.</div></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>Distributions</h3></header><div class="body"><div class="chart-box"><canvas id="c-cmp-hist"></canvas></div></div></div>
+        <div class="panel"><header><h3>Capability shift</h3></header><div class="body"><div class="chart-box"><canvas id="c-cmp-bar"></canvas></div></div></div>
+      </div>
+    </section>
+
+    <!-- 07 FORECAST -->
+    <section class="view" id="view-forecast" hidden>
+      <div class="page-head">
+        <h2>Trend &amp; capability roadmap</h2>
+        <p>Rolling capability is fit with a least-squares trend and projected forward. The roadmap works backwards from a Cpk goal to the variation reduction it would take to get there.</p>
+      </div>
+      <div class="panel"><header><h3>Settings</h3>
+        <div class="row">
+          <label class="fld" style="margin:0"><span>Rolling window</span><input type="number" id="fc-win" min="20" max="2000" value="100" style="width:100px"></label>
+          <label class="fld" style="margin:0"><span>Windows to project</span><input type="number" id="fc-ahead" min="1" max="50" value="8" style="width:100px"></label>
+          <label class="fld" style="margin:0"><span>Cpk goal</span><input type="number" id="fc-goal" min="0.5" max="4" step="0.05" value="1.67" style="width:100px"></label>
+        </div>
+      </header></div>
+      <div class="panel"><header><h3>Rolling Cpk with projection</h3><span class="hint" id="fc-hint">—</span></header>
+        <div class="body"><div class="chart-box tall"><canvas id="c-fc"></canvas></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>Mean and sigma drift</h3></header><div class="body"><div class="chart-box"><canvas id="c-drift"></canvas></div></div></div>
+        <div class="panel"><header><h3>Variation reduction roadmap</h3><span class="hint">What it takes to reach the goal</span></header>
+          <div class="body tight"><div class="tbl-wrap" id="fc-road" style="max-height:340px"><div class="empty">Set spec limits to build a roadmap.</div></div></div></div>
+      </div>
+    </section>
+
+    <!-- 08 FMEA -->
+    <section class="view" id="view-fmea" hidden>
+      <div class="page-head">
+        <h2>Failure mode and effects analysis</h2>
+        <p>Severity, occurrence and detection are scored 1–10. RPN updates as you type. Rows start seeded with common advanced packaging failure modes — edit them to match your process.</p>
+      </div>
+      <div class="panel"><header><h3>Risk summary</h3><span class="hint" id="fmea-hint">—</span></header>
+        <div class="body"><div class="metrics" id="fmea-metrics"></div></div>
+      </div>
+      <div class="panel">
+        <header><h3>FMEA worksheet</h3>
+          <div class="row">
+            <button class="btn sm primary" id="btn-fmea-add">Add row</button>
+            <button class="btn sm ghost" id="btn-fmea-sort">Sort by RPN</button>
+            <button class="btn sm ghost" id="btn-fmea-export">Export (CSV)</button>
+            <button class="btn sm ghost" id="btn-fmea-reset">Reset to defaults</button>
+          </div>
+        </header>
+        <div class="body tight"><div class="tbl-wrap" style="max-height:none" id="fmea-table"></div></div>
+      </div>
+      <div class="panel"><header><h3>Top risks</h3></header><div class="body"><div class="chart-box"><canvas id="c-fmea"></canvas></div></div></div>
+    </section>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+/* =====================================================================
+   Advanced Packaging SPC Analyzer
+   Everything runs locally in the browser. No network calls are made
+   with your data; the only external requests are the CDN libraries.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------
+   Small helpers
+   --------------------------------------------------------------- */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const CSS = getComputedStyle(document.documentElement);
+const C = {
+  probe: '#5AC8DE', cu: '#C4703A', alert: '#FF5F56', warn: '#E8B23C',
+  ok: '#4FD08A', violet: '#9B8CFF', grid: 'rgba(255,255,255,.055)',
+  tick: '#7C8899', text: '#AEBAC9', panel: '#151A21', line: '#2A323D'
+};
+
+function fmt(v, d) {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  const dec = d === undefined ? 3 : d;
+  const a = Math.abs(v);
+  if (a !== 0 && (a < 1e-4 || a >= 1e7)) return v.toExponential(2);
+  return v.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function fmtInt(v) {
+  return (v === null || v === undefined || !isFinite(v)) ? '—' : Math.round(v).toLocaleString();
+}
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+let toastTimer = null;
+function toast(msg, bad) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3200);
+}
+function downloadText(name, text, mime) {
+  const blob = new Blob([text], { type: mime || 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function toCSV(rows) {
+  return rows.map(r => r.map(c => {
+    const s = c === null || c === undefined ? '' : String(c);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\n');
+}
+
+/* ---------------------------------------------------------------
+   Statistics
+   --------------------------------------------------------------- */
+// Control chart constants, subgroup size n = 2..25
+const D2 = [0, 0, 1.128, 1.693, 2.059, 2.326, 2.534, 2.704, 2.847, 2.970, 3.078, 3.173, 3.258, 3.336, 3.407, 3.472, 3.532, 3.588, 3.640, 3.689, 3.735, 3.778, 3.819, 3.858, 3.895, 3.931];
+const A2 = [0, 0, 1.880, 1.023, 0.729, 0.577, 0.483, 0.419, 0.373, 0.337, 0.308, 0.285, 0.266, 0.249, 0.235, 0.223, 0.212, 0.203, 0.194, 0.187, 0.180, 0.173, 0.167, 0.162, 0.157, 0.153];
+const D3 = [0, 0, 0, 0, 0, 0, 0, 0.076, 0.136, 0.184, 0.223, 0.256, 0.283, 0.307, 0.328, 0.347, 0.363, 0.378, 0.391, 0.403, 0.415, 0.425, 0.434, 0.443, 0.451, 0.459];
+const D4 = [0, 0, 3.267, 2.574, 2.282, 2.114, 2.004, 1.924, 1.864, 1.816, 1.777, 1.744, 1.717, 1.693, 1.672, 1.653, 1.637, 1.622, 1.608, 1.597, 1.585, 1.575, 1.566, 1.557, 1.548, 1.541];
+
+// Cumulative normal, Hart-style rational approximation (double precision).
+function normCDF(x) {
+  if (!isFinite(x)) return x > 0 ? 1 : 0;
+  const ax = Math.abs(x);
+  let cum;
+  if (ax > 37) {
+    cum = 0;
+  } else {
+    const e = Math.exp(-ax * ax / 2);
+    if (ax < 7.07106781186547) {
+      let b = 3.52624965998911e-02 * ax + 0.700383064443688;
+      b = b * ax + 6.37396220353165; b = b * ax + 33.912866078383;
+      b = b * ax + 112.079291497871; b = b * ax + 221.213596169931;
+      b = b * ax + 220.206867912376;
+      let d = 8.83883476483184e-02 * ax + 1.75566716318264;
+      d = d * ax + 16.064177579207; d = d * ax + 86.7807322029461;
+      d = d * ax + 296.564248779674; d = d * ax + 637.333633378831;
+      d = d * ax + 793.826512519948; d = d * ax + 440.413735824752;
+      cum = e * b / d;
+    } else {
+      let b = ax + 0.65;
+      b = ax + 4 / b; b = ax + 3 / b; b = ax + 2 / b; b = ax + 1 / b;
+      cum = e / (b * 2.506628274631);
+    }
+  }
+  return x > 0 ? 1 - cum : cum;
+}
+// Inverse normal CDF (Acklam), good to ~1e-9 after one Halley refinement.
+function normINV(p) {
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const pl = 0.02425, ph = 1 - pl;
+  let q, r, x;
+  if (p < pl) {
+    q = Math.sqrt(-2 * Math.log(p));
+    x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  } else if (p <= ph) {
+    q = p - 0.5; r = q * q;
+    x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  } else {
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  const e = normCDF(x) - p;
+  const u = e * Math.sqrt(2 * Math.PI) * Math.exp(x * x / 2);
+  return x - u / (1 + x * u / 2);
+}
+
+const ST = {
+  mean(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s / a.length; },
+  // Welford, single pass, numerically stable on 50k+ rows
+  meanSd(a) {
+    let n = 0, m = 0, m2 = 0;
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i]; n++;
+      const d = x - m; m += d / n; m2 += d * (x - m);
+    }
+    return { n: n, mean: m, sd: n > 1 ? Math.sqrt(m2 / (n - 1)) : 0, ss: m2 };
+  },
+  minMax(a) {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < a.length; i++) { if (a[i] < lo) lo = a[i]; if (a[i] > hi) hi = a[i]; }
+    return { min: lo, max: hi };
+  },
+  quantiles(a, qs) {
+    const s = Float64Array.from(a); s.sort();
+    return qs.map(q => {
+      const pos = (s.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+      return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo);
+    });
+  },
+  movingRange(a) {
+    const n = a.length; if (n < 2) return new Float64Array(0);
+    const mr = new Float64Array(n - 1);
+    for (let i = 1; i < n; i++) mr[i - 1] = Math.abs(a[i] - a[i - 1]);
+    return mr;
+  },
+  skewKurt(a, mean, sd) {
+    if (!sd) return { skew: 0, kurt: 0 };
+    let s3 = 0, s4 = 0; const n = a.length;
+    for (let i = 0; i < n; i++) { const z = (a[i] - mean) / sd; const z2 = z * z; s3 += z2 * z; s4 += z2 * z2; }
+    return { skew: s3 / n, kurt: s4 / n - 3 };
+  },
+  linreg(x, y) {
+    const n = x.length; if (n < 2) return { slope: 0, intercept: y.length ? y[0] : 0, r2: 0 };
+    let sx = 0, sy = 0, sxx = 0, sxy = 0, syy = 0;
+    for (let i = 0; i < n; i++) { sx += x[i]; sy += y[i]; sxx += x[i] * x[i]; sxy += x[i] * y[i]; syy += y[i] * y[i]; }
+    const den = n * sxx - sx * sx;
+    const slope = den === 0 ? 0 : (n * sxy - sx * sy) / den;
+    const intercept = (sy - slope * sx) / n;
+    const num = n * sxy - sx * sy;
+    const r2den = (n * sxx - sx * sx) * (n * syy - sy * sy);
+    return { slope: slope, intercept: intercept, r2: r2den > 0 ? (num * num) / r2den : 0 };
+  }
+};
+
+/* ---------------------------------------------------------------
+   Application state
+   --------------------------------------------------------------- */
+const APP = {
+  A: null,            // {name, rows, cols, numeric, categorical}
+  B: null,
+  map: { value: '', group: '', order: '', filter: '', filterVal: '' },
+  specs: {},          // parameter name -> {lsl, usl, target, unit}
+  cfg: { sub: 5, lambda: 0.2, k: 0.5, h: 4, zones: 'bands' },
+  rules: { 1: true, 2: true, 3: true, 4: false, 5: true, 6: true, 7: false, 8: false },
+  charts: {},
+  cache: null,        // current analysis result
+  fmea: [],
+  design: null
+};
+const MAX_PLOT_POINTS = 2600;   // display cap; math always runs on every row
+
+/* ---------------------------------------------------------------
+   Sample data — ten advanced packaging parameters
+   --------------------------------------------------------------- */
+const PARAMS = [
+  { key: 'Bump Height (um)', unit: 'µm', mean: 45, sd: 1.3, lsl: 40, usl: 50 },
+  { key: 'Warpage (um)', unit: 'µm', mean: 62, sd: 9.5, lsl: null, usl: 100 },
+  { key: 'Die Shift X (um)', unit: 'µm', mean: 0.2, sd: 2.4, lsl: -8, usl: 8 },
+  { key: 'Wire Pull Strength (gf)', unit: 'gf', mean: 9.1, sd: 0.9, lsl: 6, usl: null },
+  { key: 'Ball Shear Strength (gf)', unit: 'gf', mean: 58, sd: 5.2, lsl: 40, usl: null },
+  { key: 'Solder Void (%)', unit: '%', mean: 4.2, sd: 1.6, lsl: null, usl: 10 },
+  { key: 'RDL Line Width (um)', unit: 'µm', mean: 2.0, sd: 0.09, lsl: 1.7, usl: 2.3 },
+  { key: 'TSV Via Resistance (mOhm)', unit: 'mΩ', mean: 12.5, sd: 0.85, lsl: null, usl: 16 },
+  { key: 'Coplanarity (um)', unit: 'µm', mean: 38, sd: 7.5, lsl: null, usl: 60 },
+  { key: 'Underfill Fill Time (s)', unit: 's', mean: 44, sd: 4.1, lsl: null, usl: 60 }
+];
+const TOOLS = ['BUMP-01', 'BUMP-02', 'BUMP-03'];
+const UF_MAT = ['UF-A', 'UF-B'];
+const STENCIL = ['80um', '100um'];
+const REFLOW = ['245C', '260C'];
+
+// Box-Muller with a deterministic LCG so the sample set is reproducible.
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+function makeSample(nRows, opts) {
+  const o = opts || {};
+  const rnd = makeRng(o.seed || 20260727);
+  const gauss = () => {
+    let u = 0, v = 0;
+    while (u === 0) u = rnd();
+    while (v === 0) v = rnd();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+  const rows = new Array(nRows);
+  const lots = Math.max(4, Math.round(nRows / 200));
+  const t0 = Date.UTC(2026, 2, 2, 6, 0, 0);
+  for (let i = 0; i < nRows; i++) {
+    const lot = 'LOT-' + String(1 + Math.floor(i / Math.ceil(nRows / lots))).padStart(3, '0');
+    const tool = TOOLS[i % TOOLS.length];
+    const stencil = STENCIL[Math.floor(i / 7) % 2];
+    const reflow = REFLOW[Math.floor(i / 13) % 2];
+    const uf = UF_MAT[Math.floor(i / 5) % 2];
+    const prog = i / nRows;
+    const row = {
+      'Timestamp': new Date(t0 + i * 9 * 60000).toISOString().replace('T', ' ').slice(0, 19),
+      'Lot': lot,
+      'Wafer': 'W' + String(1 + (i % 25)).padStart(2, '0'),
+      'Unit': i + 1,
+      'Tool': tool,
+      'Stencil Opening': stencil,
+      'Reflow Peak': reflow,
+      'Underfill Material': uf
+    };
+    for (let p = 0; p < PARAMS.length; p++) {
+      const P = PARAMS[p];
+      let v = P.mean + gauss() * P.sd;
+      // tool-to-tool offset, a slow drift, and an occasional excursion
+      if (tool === 'BUMP-03') v += P.sd * 0.55;
+      if (tool === 'BUMP-02') v -= P.sd * 0.18;
+      v += P.sd * 0.45 * prog;                       // drift
+      if (P.key === 'Solder Void (%)' && reflow === '245C') v += 1.4;
+      if (P.key === 'Bump Height (um)' && stencil === '100um') v += 0.9;
+      if (P.key === 'Underfill Fill Time (s)' && uf === 'UF-B') v -= 3.2;
+      if (P.key === 'Warpage (um)' && reflow === '260C') v += 6.0;
+      if (rnd() < 0.0022) v += (rnd() < 0.5 ? -1 : 1) * P.sd * (3.6 + rnd() * 2.5);  // excursion
+      if (o.shift) {
+        v = P.mean + (v - P.mean) * 0.62;            // improved sigma
+        v += P.sd * (o.shiftMean || 0);
+      }
+      const dec = P.sd < 0.2 ? 4 : (P.sd < 2 ? 3 : 2);
+      row[P.key] = Number(v.toFixed(dec));
+    }
+    if (row['Solder Void (%)'] < 0) row['Solder Void (%)'] = 0;
+    rows[i] = row;
+  }
+  return rows;
+}
+
+/* ---------------------------------------------------------------
+   Dataset ingestion
+   --------------------------------------------------------------- */
+function buildDataset(name, rows) {
+  if (!rows || !rows.length) throw new Error('That file had no readable rows.');
+  const cols = [];
+  const seen = {};
+  rows.slice(0, 200).forEach(r => {
+    Object.keys(r).forEach(k => { if (!seen[k]) { seen[k] = 1; cols.push(k); } });
+  });
+  const numeric = [], categorical = [];
+  const probe = Math.min(rows.length, 500);
+  cols.forEach(c => {
+    let num = 0, tot = 0;
+    const levels = {};
+    let nLevels = 0;
+    for (let i = 0; i < probe; i++) {
+      const v = rows[i][c];
+      if (v === null || v === undefined || v === '') continue;
+      tot++;
+      if (typeof v === 'number' ? isFinite(v) : (v !== '' && isFinite(Number(v)))) num++;
+      if (nLevels < 60 && !(v in levels)) { levels[v] = 1; nLevels++; }
+    }
+    if (tot && num / tot > 0.85) numeric.push(c);
+    if (nLevels > 1 && nLevels <= 30) categorical.push(c);
+  });
+  return { name: name, rows: rows, cols: cols, numeric: numeric, categorical: categorical };
+}
+
+function readFile(file, slot, done) {
+  const bar = $('#load-bar');
+  const isA = slot === 'A';
+  if (isA) { bar.hidden = false; bar.firstElementChild.style.width = '8%'; }
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const finish = (rows) => {
+    try {
+      const ds = buildDataset(file.name, rows);
+      if (isA) { bar.firstElementChild.style.width = '100%'; setTimeout(() => { bar.hidden = true; }, 500); }
+      done(ds);
+    } catch (err) {
+      if (isA) bar.hidden = true;
+      toast(err.message || 'Could not read that file.', true);
+    }
+  };
+  const fail = (msg) => { if (isA) bar.hidden = true; toast(msg, true); };
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    if (typeof XLSX === 'undefined') return fail('The Excel reader did not load. Check the connection and reload, or save the file as CSV.');
+    const fr = new FileReader();
+    fr.onerror = () => fail('The file could not be read.');
+    fr.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        finish(XLSX.utils.sheet_to_json(sheet, { defval: null }));
+      } catch (err) { fail('That workbook could not be parsed.'); }
+    };
+    fr.readAsArrayBuffer(file);
+  } else {
+    if (typeof Papa === 'undefined') return fail('The CSV reader did not load. Check the connection and reload.');
+    Papa.parse(file, {
+      header: true, dynamicTyping: true, skipEmptyLines: 'greedy',
+      complete: res => {
+        if (!res.data || !res.data.length) return fail('No rows found in that CSV.');
+        finish(res.data);
+      },
+      error: () => fail('That CSV could not be parsed.')
+    });
+  }
+}
+
+function setDatasetA(ds) {
+  APP.A = ds;
+  $('#load-hint').textContent = ds.name + ' · ' + fmtInt(ds.rows.length) + ' rows · ' + ds.cols.length + ' columns';
+  populateMapping();
+  populateDoeColumns();
+  renderPreview();
+  $('#cmp-a-name').textContent = ds.name;
+  refresh();
+  toast('Loaded ' + fmtInt(ds.rows.length) + ' rows from ' + ds.name);
+}
+
+/* ---------------------------------------------------------------
+   Column mapping + spec limits
+   --------------------------------------------------------------- */
+function fillSelect(el, items, current, blankLabel) {
+  el.innerHTML = (blankLabel ? '<option value="">' + esc(blankLabel) + '</option>' : '') +
+    items.map(c => '<option value="' + esc(c) + '"' + (c === current ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+}
+function guessValueColumn(ds) {
+  const known = PARAMS.map(p => p.key);
+  const hit = ds.numeric.find(c => known.indexOf(c) >= 0);
+  if (hit) return hit;
+  const skip = /^(unit|id|index|seq|wafer|lot|slot|row|no\.?|count)$/i;
+  return ds.numeric.find(c => !skip.test(c)) || ds.numeric[0] || '';
+}
+function populateMapping() {
+  const ds = APP.A; if (!ds) return;
+  const val = APP.map.value && ds.numeric.indexOf(APP.map.value) >= 0 ? APP.map.value : guessValueColumn(ds);
+  APP.map.value = val;
+  fillSelect($('#map-value'), ds.numeric, val, ds.numeric.length ? null : '(no numeric columns found)');
+  const grp = ds.categorical.filter(c => c !== val);
+  const guessGrp = APP.map.group && grp.indexOf(APP.map.group) >= 0 ? APP.map.group :
+    (grp.find(c => /lot|batch|wafer|group|subgroup/i.test(c)) || '');
+  APP.map.group = guessGrp;
+  fillSelect($('#map-group'), grp, guessGrp, 'Consecutive units of n');
+  const ord = ds.cols.filter(c => c !== val);
+  const guessOrd = APP.map.order && ord.indexOf(APP.map.order) >= 0 ? APP.map.order :
+    (ord.find(c => /time|date|stamp|seq|order/i.test(c)) || '');
+  APP.map.order = guessOrd;
+  fillSelect($('#map-order'), ord, guessOrd, 'Row order in the file');
+  fillSelect($('#map-filter'), ds.categorical, APP.map.filter, 'No filter');
+  syncFilterValues();
+  loadSpecInputs();
+}
+function syncFilterValues() {
+  const ds = APP.A;
+  const col = APP.map.filter;
+  const wrap = $('#filter-val-wrap');
+  if (!ds || !col) { wrap.hidden = true; APP.map.filterVal = ''; return; }
+  const seen = [];
+  for (let i = 0; i < ds.rows.length && seen.length < 60; i++) {
+    const v = ds.rows[i][col];
+    if (v !== null && v !== undefined && v !== '' && seen.indexOf(String(v)) < 0) seen.push(String(v));
+  }
+  seen.sort();
+  wrap.hidden = false;
+  fillSelect($('#map-filter-val'), seen, APP.map.filterVal, 'All values');
+}
+function defaultSpecFor(name) {
+  const p = PARAMS.find(x => x.key === name);
+  if (p) return { lsl: p.lsl, usl: p.usl, target: null, unit: p.unit };
+  const m = name && name.match(/\(([^)]+)\)\s*$/);
+  return { lsl: null, usl: null, target: null, unit: m ? m[1] : '' };
+}
+function currentSpec() {
+  const name = APP.map.value;
+  if (!name) return { lsl: null, usl: null, target: null, unit: '' };
+  if (!APP.specs[name]) APP.specs[name] = defaultSpecFor(name);
+  return APP.specs[name];
+}
+function loadSpecInputs() {
+  const s = currentSpec();
+  $('#spec-lsl').value = s.lsl === null || s.lsl === undefined ? '' : s.lsl;
+  $('#spec-usl').value = s.usl === null || s.usl === undefined ? '' : s.usl;
+  $('#spec-tgt').value = s.target === null || s.target === undefined ? '' : s.target;
+  $('#spec-unit').value = s.unit || '';
+  updateSpecState();
+}
+function readSpecInputs() {
+  const s = currentSpec();
+  const num = el => { const v = $(el).value.trim(); return v === '' ? null : Number(v); };
+  s.lsl = num('#spec-lsl'); s.usl = num('#spec-usl'); s.target = num('#spec-tgt');
+  s.unit = $('#spec-unit').value.trim();
+  if (s.lsl !== null && s.usl !== null && s.lsl > s.usl) { const t = s.lsl; s.lsl = s.usl; s.usl = t; }
+  updateSpecState();
+}
+function updateSpecState() {
+  const s = currentSpec();
+  const el = $('#spec-state');
+  if (s.lsl === null && s.usl === null) { el.textContent = 'No limits set'; el.className = 'pill'; }
+  else if (s.lsl === null || s.usl === null) { el.textContent = 'One-sided limit'; el.className = 'pill cu'; }
+  else { el.textContent = 'Two-sided: ' + fmt(s.lsl, 3) + ' to ' + fmt(s.usl, 3); el.className = 'pill cu'; }
+}
+
+/* ---------------------------------------------------------------
+   Preview table
+   --------------------------------------------------------------- */
+function renderPreview() {
+  const ds = APP.A;
+  const host = $('#preview');
+  if (!ds) { host.innerHTML = '<div class="empty">Load a file or the sample dataset to begin.</div>'; return; }
+  const n = Math.min(120, ds.rows.length);
+  const cols = ds.cols.slice(0, 18);
+  let html = '<table><thead><tr><th>#</th>' + cols.map(c =>
+    '<th class="txt">' + esc(c) + (c === APP.map.value ? ' <span class="pill cu">value</span>' : '') + '</th>').join('') + '</tr></thead><tbody>';
+  for (let i = 0; i < n; i++) {
+    const r = ds.rows[i];
+    html += '<tr><td style="color:var(--muted)">' + (i + 1) + '</td>' +
+      cols.map(c => {
+        const v = r[c];
+        return '<td' + (typeof v === 'number' ? ' class="num"' : ' class="txt"') + '>' + esc(v === null || v === undefined ? '' : v) + '</td>';
+      }).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  host.innerHTML = html;
+  $('#preview-hint').textContent = 'Showing ' + n + ' of ' + fmtInt(ds.rows.length) + ' rows' +
+    (ds.cols.length > 18 ? ' · first 18 of ' + ds.cols.length + ' columns' : '');
+}
+
+/* ---------------------------------------------------------------
+   Series extraction
+   --------------------------------------------------------------- */
+function extractSeries(ds, valueCol, groupCol, orderCol, filterCol, filterVal) {
+  const rows = ds.rows, n = rows.length;
+  const vals = new Float64Array(n);
+  const idx = new Int32Array(n);
+  const groups = groupCol ? new Array(n) : null;
+  const labels = new Array(n);
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    const r = rows[i];
+    if (filterCol && filterVal !== '' && String(r[filterCol]) !== filterVal) continue;
+    let v = r[valueCol];
+    if (typeof v !== 'number') { if (v === null || v === undefined || v === '') continue; v = Number(v); }
+    if (!isFinite(v)) continue;
+    vals[k] = v; idx[k] = i;
+    if (groups) groups[k] = String(r[groupCol]);
+    labels[k] = orderCol ? String(r[orderCol]) : String(k + 1);
+    k++;
+  }
+  return {
+    values: vals.subarray(0, k),
+    rowIndex: idx.subarray(0, k),
+    groups: groups ? groups.slice(0, k) : null,
+    labels: labels.slice(0, k),
+    skipped: n - k
+  };
+}
+
+/* ---------------------------------------------------------------
+   Western Electric / Nelson rule definitions
+   --------------------------------------------------------------- */
+const RULES = [
+  { id: 1, name: '1 point beyond 3σ', desc: 'A single point outside the control limits.' },
+  { id: 2, name: '9 points on one side of the center line', desc: 'A sustained shift in the process mean.' },
+  { id: 3, name: '6 points steadily rising or falling', desc: 'A trend, often tool drift or consumable wear.' },
+  { id: 4, name: '14 points alternating up and down', desc: 'Systematic over-adjustment or two alternating sources.' },
+  { id: 5, name: '2 of 3 points beyond 2σ, same side', desc: 'An early warning of a shift.' },
+  { id: 6, name: '4 of 5 points beyond 1σ, same side', desc: 'A smaller but persistent shift.' },
+  { id: 7, name: '15 points within 1σ', desc: 'Stratification — limits may be too wide or data over-filtered.' },
+  { id: 8, name: '8 points beyond 1σ on both sides', desc: 'Mixture — two populations in one chart.' }
+];
+
+// Returns Map: point index -> array of rule ids
+function runRules(v, cl, sigma, enabled) {
+  const n = v.length, hits = new Map();
+  const add = (i, id) => {
+    let a = hits.get(i);
+    if (!a) { a = []; hits.set(i, a); }
+    if (a.indexOf(id) < 0) a.push(id);
+  };
+  if (!n || !isFinite(sigma) || sigma <= 0) return hits;
+  const z = new Float64Array(n);
+  for (let i = 0; i < n; i++) z[i] = (v[i] - cl) / sigma;
+
+  if (enabled[1]) for (let i = 0; i < n; i++) if (Math.abs(z[i]) > 3) add(i, 1);
+
+  if (enabled[2]) {
+    let run = 0, sign = 0;
+    for (let i = 0; i < n; i++) {
+      const s = z[i] > 0 ? 1 : (z[i] < 0 ? -1 : 0);
+      if (s !== 0 && s === sign) run++; else { sign = s; run = s === 0 ? 0 : 1; }
+      if (run >= 9) for (let j = i - 8; j <= i; j++) add(j, 2);
+    }
+  }
+  if (enabled[3]) {
+    let up = 1, dn = 1;
+    for (let i = 1; i < n; i++) {
+      up = v[i] > v[i - 1] ? up + 1 : 1;
+      dn = v[i] < v[i - 1] ? dn + 1 : 1;
+      if (up >= 6) for (let j = i - 5; j <= i; j++) add(j, 3);
+      if (dn >= 6) for (let j = i - 5; j <= i; j++) add(j, 3);
+    }
+  }
+  if (enabled[4]) {
+    let run = 1;
+    for (let i = 2; i < n; i++) {
+      const a = v[i - 1] - v[i - 2], b = v[i] - v[i - 1];
+      run = (a > 0 && b < 0) || (a < 0 && b > 0) ? run + 1 : 1;
+      if (run >= 13) for (let j = i - 13; j <= i; j++) if (j >= 0) add(j, 4);
+    }
+  }
+  if (enabled[5]) {
+    for (let i = 2; i < n; i++) {
+      let hiN = 0, loN = 0;
+      for (let j = i - 2; j <= i; j++) { if (z[j] > 2) hiN++; else if (z[j] < -2) loN++; }
+      if (hiN >= 2 || loN >= 2) for (let j = i - 2; j <= i; j++) if ((hiN >= 2 && z[j] > 2) || (loN >= 2 && z[j] < -2)) add(j, 5);
+    }
+  }
+  if (enabled[6]) {
+    for (let i = 4; i < n; i++) {
+      let hiN = 0, loN = 0;
+      for (let j = i - 4; j <= i; j++) { if (z[j] > 1) hiN++; else if (z[j] < -1) loN++; }
+      if (hiN >= 4 || loN >= 4) for (let j = i - 4; j <= i; j++) if ((hiN >= 4 && z[j] > 1) || (loN >= 4 && z[j] < -1)) add(j, 6);
+    }
+  }
+  if (enabled[7]) {
+    let run = 0;
+    for (let i = 0; i < n; i++) {
+      run = Math.abs(z[i]) < 1 ? run + 1 : 0;
+      if (run >= 15) for (let j = i - 14; j <= i; j++) add(j, 7);
+    }
+  }
+  if (enabled[8]) {
+    let run = 0;
+    for (let i = 0; i < n; i++) {
+      run = Math.abs(z[i]) > 1 ? run + 1 : 0;
+      if (run >= 8) {
+        let hasHi = false, hasLo = false;
+        for (let j = i - 7; j <= i; j++) { if (z[j] > 1) hasHi = true; if (z[j] < -1) hasLo = true; }
+        if (hasHi && hasLo) for (let j = i - 7; j <= i; j++) add(j, 8);
+      }
+    }
+  }
+  return hits;
+}
+
+/* ---------------------------------------------------------------
+   Capability
+   --------------------------------------------------------------- */
+function capability(mean, sWithin, sOverall, lsl, usl) {
+  const out = { cp: null, cpk: null, pp: null, ppk: null, cpu: null, cpl: null, ppm: null, zbench: null, sigmaLevel: null, ppmU: 0, ppmL: 0 };
+  const has = lsl !== null && lsl !== undefined && isFinite(lsl);
+  const hasU = usl !== null && usl !== undefined && isFinite(usl);
+  if (!has && !hasU) return out;
+  if (sWithin > 0) {
+    if (hasU) out.cpu = (usl - mean) / (3 * sWithin);
+    if (has) out.cpl = (mean - lsl) / (3 * sWithin);
+    if (has && hasU) out.cp = (usl - lsl) / (6 * sWithin);
+    out.cpk = Math.min(out.cpu === null ? Infinity : out.cpu, out.cpl === null ? Infinity : out.cpl);
+    if (!isFinite(out.cpk)) out.cpk = null;
+  }
+  if (sOverall > 0) {
+    const ppu = hasU ? (usl - mean) / (3 * sOverall) : Infinity;
+    const ppl = has ? (mean - lsl) / (3 * sOverall) : Infinity;
+    if (has && hasU) out.pp = (usl - lsl) / (6 * sOverall);
+    out.ppk = Math.min(ppu, ppl);
+    if (!isFinite(out.ppk)) out.ppk = null;
+    out.ppmU = hasU ? (1 - normCDF((usl - mean) / sOverall)) * 1e6 : 0;
+    out.ppmL = has ? normCDF((lsl - mean) / sOverall) * 1e6 : 0;
+    out.ppm = out.ppmU + out.ppmL;
+    const p = Math.min(0.9999999999, Math.max(1e-12, out.ppm / 1e6));
+    out.zbench = -normINV(p);
+    out.sigmaLevel = out.zbench + 1.5;
+  }
+  return out;
+}
+function observedPPM(v, lsl, usl) {
+  let bad = 0;
+  const has = lsl !== null && isFinite(lsl), hasU = usl !== null && isFinite(usl);
+  if (!has && !hasU) return null;
+  for (let i = 0; i < v.length; i++) if ((has && v[i] < lsl) || (hasU && v[i] > usl)) bad++;
+  return v.length ? bad / v.length * 1e6 : null;
+}
+
+/* ---------------------------------------------------------------
+   Core analysis — runs on every row, no sampling
+   --------------------------------------------------------------- */
+function analyze(ds, opts) {
+  const o = opts || {};
+  const valueCol = o.value || APP.map.value;
+  if (!ds || !valueCol) return null;
+  const s = extractSeries(ds, valueCol, o.group !== undefined ? o.group : APP.map.group,
+    o.order !== undefined ? o.order : APP.map.order,
+    o.filter !== undefined ? o.filter : APP.map.filter,
+    o.filterVal !== undefined ? o.filterVal : APP.map.filterVal);
+  const v = s.values;
+  if (!v.length) return null;
+
+  const ms = ST.meanSd(v);
+  const mr = ST.movingRange(v);
+  const mrBar = mr.length ? ST.mean(mr) : 0;
+  const sigmaWithin = mrBar > 0 ? mrBar / D2[2] : ms.sd;
+  const mm = ST.minMax(v);
+  const q = ST.quantiles(v, [0.25, 0.5, 0.75]);
+  const sk = ST.skewKurt(v, ms.mean, ms.sd);
+
+  // subgroups: explicit column, else consecutive units of n
+  const subSize = Math.max(2, Math.min(25, o.sub || APP.cfg.sub));
+  const groups = [];
+  if (s.groups) {
+    let cur = null, bucket = null;
+    for (let i = 0; i < v.length; i++) {
+      if (s.groups[i] !== cur) { cur = s.groups[i]; bucket = { label: cur, vals: [], start: i }; groups.push(bucket); }
+      bucket.vals.push(v[i]);
+    }
+  } else {
+    for (let i = 0; i < v.length; i += subSize) {
+      const vals = [];
+      for (let j = i; j < Math.min(i + subSize, v.length); j++) vals.push(v[j]);
+      groups.push({ label: 'SG ' + (groups.length + 1), vals: vals, start: i });
+    }
+  }
+  const gStats = groups.filter(g => g.vals.length >= 2).map(g => {
+    const st = ST.meanSd(g.vals);
+    const gm = ST.minMax(g.vals);
+    return { label: g.label, n: g.vals.length, mean: st.mean, sd: st.sd, range: gm.max - gm.min, start: g.start, vals: g.vals };
+  });
+  const nBar = gStats.length ? Math.round(gStats.reduce((a, g) => a + g.n, 0) / gStats.length) : subSize;
+  const nIdx = Math.max(2, Math.min(25, nBar));
+  const rBar = gStats.length ? ST.mean(gStats.map(g => g.range)) : 0;
+  const xBarBar = gStats.length ? ST.mean(gStats.map(g => g.mean)) : ms.mean;
+  const sigmaSub = rBar > 0 ? rBar / D2[nIdx] : sigmaWithin;
+
+  const spec = (APP.specs[valueCol] || defaultSpecFor(valueCol));
+  const cap = capability(ms.mean, sigmaWithin, ms.sd, spec.lsl, spec.usl);
+  cap.ppmObs = observedPPM(v, spec.lsl, spec.usl);
+
+  const hits = runRules(v, ms.mean, sigmaWithin, o.rules || APP.rules);
+  const ruleCounts = {};
+  RULES.forEach(r => { ruleCounts[r.id] = 0; });
+  hits.forEach(ids => ids.forEach(id => { ruleCounts[id]++; }));
+
+  return {
+    ds: ds, valueCol: valueCol, spec: spec, series: s, values: v,
+    n: v.length, mean: ms.mean, sd: ms.sd, sigmaWithin: sigmaWithin,
+    min: mm.min, max: mm.max, q1: q[0], median: q[1], q3: q[2],
+    skew: sk.skew, kurt: sk.kurt,
+    mr: mr, mrBar: mrBar,
+    ucl: ms.mean + 3 * sigmaWithin, lcl: ms.mean - 3 * sigmaWithin,
+    mrUCL: D4[2] * mrBar,
+    groups: gStats, rBar: rBar, xBarBar: xBarBar, sigmaSub: sigmaSub, nBar: nIdx,
+    cap: cap, hits: hits, ruleCounts: ruleCounts,
+    oocCount: hits.size
+  };
+}
+
+/* ---------------------------------------------------------------
+   Downsampling for display (min/max per bucket keeps excursions)
+   --------------------------------------------------------------- */
+function downsample(v, cap) {
+  const n = v.length;
+  const limit = cap || MAX_PLOT_POINTS;
+  if (n <= limit) {
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = { x: i, y: v[i] };
+    return out;
+  }
+  const buckets = Math.floor(limit / 2);
+  const size = n / buckets;
+  const out = [];
+  for (let b = 0; b < buckets; b++) {
+    const s = Math.floor(b * size), e = Math.min(n, Math.floor((b + 1) * size));
+    if (e <= s) continue;
+    let lo = s, hi = s;
+    for (let i = s; i < e; i++) { if (v[i] < v[lo]) lo = i; if (v[i] > v[hi]) hi = i; }
+    const a = Math.min(lo, hi), c = Math.max(lo, hi);
+    out.push({ x: a, y: v[a] });
+    if (c !== a) out.push({ x: c, y: v[c] });
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   Charting
+   --------------------------------------------------------------- */
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.color = C.text;
+  Chart.defaults.font.family = "'IBM Plex Mono',ui-monospace,monospace";
+  Chart.defaults.font.size = 10;
+  Chart.defaults.animation = false;
+  Chart.defaults.plugins.legend.display = false;
+  Chart.defaults.plugins.tooltip.backgroundColor = '#0E1116';
+  Chart.defaults.plugins.tooltip.borderColor = C.line;
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+  Chart.defaults.plugins.tooltip.titleColor = '#E5EAF1';
+  Chart.defaults.plugins.tooltip.bodyColor = '#AEBAC9';
+  Chart.defaults.plugins.tooltip.padding = 9;
+}
+
+// Draws center line, sigma zones, control limits and spec limits behind the data.
+const zonePlugin = {
+  id: 'zones',
+  beforeDatasetsDraw(chart, args, pluginOpts) {
+    const o = chart.options.plugins && chart.options.plugins.zones;
+    if (!o || !o.cl && o.cl !== 0) return;
+    const { ctx, chartArea: area, scales } = chart;
+    const y = scales.y; if (!y) return;
+    const px = val => y.getPixelForValue(val);
+    const clamp = p => Math.max(area.top, Math.min(area.bottom, p));
+    ctx.save();
+    ctx.beginPath(); ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top); ctx.clip();
+    const sig = o.sigma || 0;
+    if (sig > 0 && o.mode !== 'none') {
+      if (o.mode === 'bands') {
+        const bands = [
+          [1, 2, 'rgba(79,208,138,.045)'],
+          [2, 3, 'rgba(232,178,60,.055)'],
+          [3, 4.4, 'rgba(255,95,86,.05)']
+        ];
+        bands.forEach(([a, b, fill]) => {
+          ctx.fillStyle = fill;
+          const y1 = clamp(px(o.cl + b * sig)), y2 = clamp(px(o.cl + a * sig));
+          ctx.fillRect(area.left, y1, area.right - area.left, y2 - y1);
+          const y3 = clamp(px(o.cl - a * sig)), y4 = clamp(px(o.cl - b * sig));
+          ctx.fillRect(area.left, y3, area.right - area.left, y4 - y3);
+        });
+      }
+      ctx.setLineDash([2, 4]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(174,186,201,.32)';
+      [1, 2].forEach(m => {
+        [o.cl + m * sig, o.cl - m * sig].forEach(val => {
+          const p = px(val);
+          if (p < area.top || p > area.bottom) return;
+          ctx.beginPath(); ctx.moveTo(area.left, p); ctx.lineTo(area.right, p); ctx.stroke();
+        });
+      });
+      ctx.setLineDash([]);
+    }
+    const label = (val, text, color, dash) => {
+      const p = px(val);
+      if (p < area.top - 2 || p > area.bottom + 2) return;
+      ctx.setLineDash(dash || []);
+      ctx.strokeStyle = color; ctx.lineWidth = 1.25;
+      ctx.beginPath(); ctx.moveTo(area.left, p); ctx.lineTo(area.right, p); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color; ctx.font = "500 9px 'IBM Plex Mono',monospace";
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText(text, area.left + 5, p - 2);
+    };
+    if (o.showLimits !== false && sig > 0) {
+      label(o.cl + 3 * sig, 'UCL ' + fmt(o.cl + 3 * sig, 3), C.alert);
+      label(o.cl - 3 * sig, 'LCL ' + fmt(o.cl - 3 * sig, 3), C.alert);
+    }
+    label(o.cl, (o.clLabel || 'CL') + ' ' + fmt(o.cl, 3), C.cu);
+    const specColor = o.specColor || C.violet;
+    if (o.usl !== null && o.usl !== undefined && isFinite(o.usl)) label(o.usl, (o.uslLabel || 'USL') + ' ' + fmt(o.usl, 3), specColor, [6, 4]);
+    if (o.lsl !== null && o.lsl !== undefined && isFinite(o.lsl)) label(o.lsl, (o.lslLabel || 'LSL') + ' ' + fmt(o.lsl, 3), specColor, [6, 4]);
+    if (o.target !== null && o.target !== undefined && isFinite(o.target)) label(o.target, 'Target', 'rgba(174,186,201,.6)', [3, 3]);
+    ctx.restore();
+  }
+};
+if (typeof Chart !== 'undefined') Chart.register(zonePlugin);
+
+function killChart(key) {
+  if (APP.charts[key]) { APP.charts[key].destroy(); delete APP.charts[key]; }
+}
+function makeChart(key, canvasId, config) {
+  killChart(key);
+  const el = document.getElementById(canvasId);
+  if (!el || typeof Chart === 'undefined') return null;
+  APP.charts[key] = new Chart(el.getContext('2d'), config);
+  return APP.charts[key];
+}
+function baseScales(xTitle, yTitle, labelsFn) {
+  return {
+    x: {
+      type: 'linear', title: { display: !!xTitle, text: xTitle, color: C.tick, font: { size: 9 } },
+      grid: { color: C.grid, drawTicks: false }, border: { color: C.line },
+      ticks: {
+        color: C.tick, maxRotation: 0, autoSkipPadding: 24,
+        callback: labelsFn || (v => fmtInt(v + 1))
+      }
+    },
+    y: {
+      title: { display: !!yTitle, text: yTitle, color: C.tick, font: { size: 9 } },
+      grid: { color: C.grid, drawTicks: false }, border: { color: C.line },
+      ticks: { color: C.tick, maxTicksLimit: 8 }
+    }
+  };
+}
+function seriesLine(label, data, color, extra) {
+  return Object.assign({
+    label: label, data: data, borderColor: color, backgroundColor: color,
+    borderWidth: 1.25, pointRadius: data.length > 400 ? 0 : 2, pointHoverRadius: 4,
+    tension: 0, spanGaps: true, parsing: false, normalized: true
+  }, extra || {});
+}
+function tooltipFor(res, unit) {
+  return {
+    mode: 'nearest', intersect: false,
+    callbacks: {
+      title: items => {
+        const i = items[0].raw.x;
+        const lab = res && res.series && res.series.labels[i] ? res.series.labels[i] : '#' + (i + 1);
+        return 'Point ' + fmtInt(i + 1) + (lab && lab !== String(i + 1) ? ' · ' + lab : '');
+      },
+      label: item => {
+        const parts = [item.dataset.label + ': ' + fmt(item.raw.y, 4) + (unit ? ' ' + unit : '')];
+        if (res && res.hits) {
+          const ids = res.hits.get(item.raw.x);
+          if (ids && ids.length) parts.push('Rules broken: ' + ids.join(', '));
+        }
+        return parts;
+      }
+    }
+  };
+}
+
+/* ---------------------------------------------------------------
+   Chart builders
+   --------------------------------------------------------------- */
+function drawIChart(res, canvasId, key) {
+  const unit = res.spec.unit || '';
+  const pts = downsample(res.values);
+  const flagged = [];
+  res.hits.forEach((ids, i) => { if (flagged.length < 4000) flagged.push({ x: i, y: res.values[i] }); });
+  flagged.sort((a, b) => a.x - b.x);
+  const ds = [seriesLine('Value', pts, C.probe)];
+  if (flagged.length) {
+    ds.push({
+      label: 'Rule violation', data: flagged, type: 'scatter',
+      borderColor: C.alert, backgroundColor: C.alert, pointRadius: 3.4, pointHoverRadius: 6,
+      showLine: false, parsing: false, order: -1
+    });
+  }
+  makeChart(key || 'i', canvasId || 'c-i', {
+    type: 'line',
+    data: { datasets: ds },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'nearest', intersect: false },
+      scales: baseScales('Observation', res.valueCol + (unit ? ' (' + unit + ')' : '')),
+      plugins: {
+        tooltip: tooltipFor(res, unit),
+        zones: {
+          cl: res.mean, sigma: res.sigmaWithin, mode: APP.cfg.zones,
+          usl: res.spec.usl, lsl: res.spec.lsl, target: res.spec.target
+        }
+      }
+    }
+  });
+  const hint = 'CL ' + fmt(res.mean, 3) + ' · UCL ' + fmt(res.ucl, 3) + ' · LCL ' + fmt(res.lcl, 3) +
+    ' · ' + fmtInt(res.oocCount) + ' flagged of ' + fmtInt(res.n) +
+    (pts.length < res.n ? ' · plotted at ' + fmtInt(pts.length) + ' points (peaks preserved)' : '');
+  const hintEl = document.getElementById(key === 'irules' ? 'irules-hint' : 'i-hint');
+  if (hintEl) hintEl.textContent = hint;
+}
+
+function drawMR(res) {
+  const pts = downsample(res.mr);
+  makeChart('mr', 'c-mr', {
+    type: 'line',
+    data: { datasets: [seriesLine('Moving range', pts, C.warn)] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: baseScales('Observation', 'MR'),
+      plugins: {
+        tooltip: tooltipFor(null, res.spec.unit),
+        zones: { cl: res.mrBar, sigma: 0, mode: 'none', showLimits: false, usl: res.mrUCL, lsl: null, uslLabel: 'UCL', specColor: C.alert }
+      }
+    }
+  });
+  let out = 0;
+  for (let i = 0; i < res.mr.length; i++) if (res.mr[i] > res.mrUCL) out++;
+  $('#mr-hint').textContent = 'MR̄ ' + fmt(res.mrBar, 4) + ' · UCL ' + fmt(res.mrUCL, 4) + ' · ' + fmtInt(out) + ' above UCL';
+}
+
+function drawCUSUM(res) {
+  const k = APP.cfg.k, h = APP.cfg.h, sig = res.sigmaWithin || 1;
+  const n = res.n;
+  const sp = new Float64Array(n), sm = new Float64Array(n);
+  let cp = 0, cm = 0, signals = 0, firstSignal = -1;
+  for (let i = 0; i < n; i++) {
+    const z = (res.values[i] - res.mean) / sig;
+    cp = Math.max(0, cp + z - k);
+    cm = Math.min(0, cm + z + k);
+    sp[i] = cp; sm[i] = cm;
+    if (cp > h || cm < -h) { signals++; if (firstSignal < 0) firstSignal = i; }
+  }
+  makeChart('cusum', 'c-cusum', {
+    type: 'line',
+    data: {
+      datasets: [
+        seriesLine('CUSUM high', downsample(sp), C.probe),
+        seriesLine('CUSUM low', downsample(sm), C.cu)
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: baseScales('Observation', 'Cumulative sum (σ)'),
+      plugins: {
+        tooltip: tooltipFor(null, 'σ'),
+        zones: { cl: 0, sigma: 0, mode: 'none', showLimits: false, usl: h, lsl: -h, uslLabel: '+h', lslLabel: '−h', specColor: C.alert }
+      }
+    }
+  });
+  $('#cusum-hint').textContent = 'k = ' + k + 'σ, h = ' + h + 'σ · ' + fmtInt(signals) + ' points past the decision limit' +
+    (firstSignal >= 0 ? ' · first at #' + fmtInt(firstSignal + 1) : '');
+}
+
+function drawEWMA(res) {
+  const lam = APP.cfg.lambda, L = 3, sig = res.sigmaWithin || 1, n = res.n;
+  const z = new Float64Array(n), up = new Float64Array(n), lo = new Float64Array(n);
+  let prev = res.mean, signals = 0;
+  for (let i = 0; i < n; i++) {
+    prev = lam * res.values[i] + (1 - lam) * prev;
+    z[i] = prev;
+    const w = L * sig * Math.sqrt((lam / (2 - lam)) * (1 - Math.pow(1 - lam, 2 * (i + 1))));
+    up[i] = res.mean + w; lo[i] = res.mean - w;
+    if (z[i] > up[i] || z[i] < lo[i]) signals++;
+  }
+  makeChart('ewma', 'c-ewma', {
+    type: 'line',
+    data: {
+      datasets: [
+        seriesLine('EWMA', downsample(z), C.probe),
+        seriesLine('Upper limit', downsample(up), 'rgba(255,95,86,.75)', { pointRadius: 0, borderDash: [4, 3] }),
+        seriesLine('Lower limit', downsample(lo), 'rgba(255,95,86,.75)', { pointRadius: 0, borderDash: [4, 3] })
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: baseScales('Observation', res.valueCol),
+      plugins: {
+        tooltip: tooltipFor(null, res.spec.unit),
+        zones: { cl: res.mean, sigma: 0, mode: 'none', showLimits: false, target: res.spec.target }
+      }
+    }
+  });
+  $('#ewma-hint').textContent = 'λ = ' + lam + ', L = 3 · ' + fmtInt(signals) + ' points outside the EWMA limits';
+}
+
+function drawXbarR(res) {
+  const g = res.groups;
+  if (!g.length) {
+    killChart('xbar'); killChart('r');
+    $('#xbar-hint').textContent = 'Not enough data for subgroups.';
+    $('#r-hint').textContent = '—';
+    return;
+  }
+  const n = res.nBar;
+  const xbarUCL = res.xBarBar + A2[n] * res.rBar, xbarLCL = res.xBarBar - A2[n] * res.rBar;
+  const rUCL = D4[n] * res.rBar, rLCL = D3[n] * res.rBar;
+  const means = downsample(Float64Array.from(g.map(x => x.mean)));
+  const ranges = downsample(Float64Array.from(g.map(x => x.range)));
+  const labelFn = v => { const i = Math.round(v); return g[i] ? String(g[i].label).slice(0, 10) : ''; };
+
+  makeChart('xbar', 'c-xbar', {
+    type: 'line',
+    data: { datasets: [seriesLine('Subgroup mean', means, C.probe)] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: baseScales('Subgroup', 'Mean', labelFn),
+      plugins: {
+        tooltip: { callbacks: { title: it => g[it[0].raw.x] ? String(g[it[0].raw.x].label) : '', label: it => 'Mean: ' + fmt(it.raw.y, 4) } },
+        zones: { cl: res.xBarBar, sigma: (xbarUCL - res.xBarBar) / 3, mode: APP.cfg.zones }
+      }
+    }
+  });
+  makeChart('r', 'c-r', {
+    type: 'line',
+    data: { datasets: [seriesLine('Subgroup range', ranges, C.cu)] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: baseScales('Subgroup', 'Range', labelFn),
+      plugins: {
+        tooltip: { callbacks: { title: it => g[it[0].raw.x] ? String(g[it[0].raw.x].label) : '', label: it => 'Range: ' + fmt(it.raw.y, 4) } },
+        zones: { cl: res.rBar, sigma: 0, mode: 'none', showLimits: false, usl: rUCL, lsl: rLCL > 0 ? rLCL : null, uslLabel: 'UCL', lslLabel: 'LCL', specColor: C.alert }
+      }
+    }
+  });
+  let oocX = 0, oocR = 0;
+  g.forEach(x => { if (x.mean > xbarUCL || x.mean < xbarLCL) oocX++; if (x.range > rUCL || x.range < rLCL) oocR++; });
+  $('#xbar-hint').textContent = fmtInt(g.length) + ' subgroups, n̄ = ' + n + ' · X̿ ' + fmt(res.xBarBar, 3) +
+    ' · UCL ' + fmt(xbarUCL, 3) + ' · LCL ' + fmt(xbarLCL, 3) + ' · ' + oocX + ' out';
+  $('#r-hint').textContent = 'R̄ ' + fmt(res.rBar, 4) + ' · UCL ' + fmt(rUCL, 4) + ' · σ within = R̄/d2 = ' + fmt(res.sigmaSub, 4) + ' · ' + oocR + ' out';
+}
+
+/* ---------------------------------------------------------------
+   Capability view
+   --------------------------------------------------------------- */
+function capClass(v) {
+  if (v === null || v === undefined || !isFinite(v)) return '';
+  if (v >= 1.67) return 'ok';
+  if (v >= 1.33) return 'cu';
+  if (v >= 1.0) return 'warn';
+  return 'bad';
+}
+function metricCard(k, v, note, cls) {
+  return '<div class="metric ' + (cls || '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + v +
+    '</div><div class="n">' + esc(note || '') + '</div></div>';
+}
+function renderCapability(res) {
+  const host = $('#cap-metrics');
+  const c = res.cap;
+  const unit = res.spec.unit ? ' ' + res.spec.unit : '';
+  if (c.cpk === null && c.ppk === null) {
+    host.innerHTML = '<div class="empty" style="grid-column:1/-1">Set at least one spec limit on the Data screen to calculate capability.</div>';
+  } else {
+    host.innerHTML = [
+      metricCard('Cp', fmt(c.cp, 2), 'Potential, within-sigma', capClass(c.cp)),
+      metricCard('Cpk', fmt(c.cpk, 2), 'Actual, within-sigma', capClass(c.cpk)),
+      metricCard('Pp', fmt(c.pp, 2), 'Potential, overall sigma', capClass(c.pp)),
+      metricCard('Ppk', fmt(c.ppk, 2), 'Actual, overall sigma', capClass(c.ppk)),
+      metricCard('Sigma level', fmt(c.sigmaLevel, 2), 'Z.bench ' + fmt(c.zbench, 2) + ' + 1.5 shift', capClass(c.sigmaLevel ? c.sigmaLevel / 3 : null)),
+      metricCard('PPM (predicted)', c.ppm === null ? '—' : (c.ppm < 0.01 ? '&lt;0.01' : fmtInt(c.ppm)), 'Normal model, both tails', c.ppm > 6210 ? 'bad' : (c.ppm > 233 ? 'warn' : 'ok')),
+      metricCard('PPM (observed)', c.ppmObs === null ? '—' : fmtInt(c.ppmObs), 'Actual points outside spec', c.ppmObs > 0 ? 'warn' : 'ok'),
+      metricCard('Centering', fmt(res.spec.target !== null && res.spec.target !== undefined ? res.mean - res.spec.target : (res.spec.lsl !== null && res.spec.usl !== null ? res.mean - (res.spec.lsl + res.spec.usl) / 2 : null), 3),
+        res.spec.target !== null && res.spec.target !== undefined ? 'Mean − target' + unit : 'Mean − spec midpoint' + unit, 'cu')
+    ].join('');
+  }
+  $('#cap-hint').textContent = fmtInt(res.n) + ' measurements · σ within = ' + fmt(res.sigmaWithin, 4) +
+    ' · σ overall = ' + fmt(res.sd, 4);
+
+  // descriptive stats
+  const rows = [
+    ['Count', fmtInt(res.n)], ['Mean', fmt(res.mean, 4)], ['Median', fmt(res.median, 4)],
+    ['Std dev (overall)', fmt(res.sd, 4)], ['Sigma within (MR̄/1.128)', fmt(res.sigmaWithin, 4)],
+    ['Sigma within (R̄/d2)', fmt(res.sigmaSub, 4)],
+    ['Minimum', fmt(res.min, 4)], ['Q1', fmt(res.q1, 4)], ['Q3', fmt(res.q3, 4)], ['Maximum', fmt(res.max, 4)],
+    ['Range', fmt(res.max - res.min, 4)], ['Skewness', fmt(res.skew, 3)], ['Kurtosis (excess)', fmt(res.kurt, 3)],
+    ['LSL', res.spec.lsl === null || res.spec.lsl === undefined ? 'not set' : fmt(res.spec.lsl, 4)],
+    ['USL', res.spec.usl === null || res.spec.usl === undefined ? 'not set' : fmt(res.spec.usl, 4)],
+    ['Rows skipped (blank or non-numeric)', fmtInt(res.series.skipped)]
+  ];
+  $('#tbl-desc').innerHTML = '<thead><tr><th class="txt">Statistic</th><th class="num">Value</th></tr></thead><tbody>' +
+    rows.map(r => '<tr><td class="txt">' + esc(r[0]) + '</td><td class="num">' + r[1] + '</td></tr>').join('') + '</tbody>';
+
+  drawHistogram(res);
+  drawCapByGroup(res);
+}
+
+function histogramData(v, bins) {
+  const mm = ST.minMax(v);
+  let lo = mm.min, hi = mm.max;
+  if (lo === hi) { lo -= 0.5; hi += 0.5; }
+  const w = (hi - lo) / bins;
+  const counts = new Float64Array(bins);
+  for (let i = 0; i < v.length; i++) {
+    let b = Math.floor((v[i] - lo) / w);
+    if (b < 0) b = 0; if (b >= bins) b = bins - 1;
+    counts[b]++;
+  }
+  return { lo: lo, hi: hi, w: w, counts: counts };
+}
+function drawHistogram(res) {
+  const bins = Math.max(12, Math.min(60, Math.round(Math.sqrt(res.n))));
+  const h = histogramData(res.values, bins);
+  const bars = [], curve = [];
+  for (let i = 0; i < bins; i++) bars.push({ x: h.lo + h.w * (i + 0.5), y: h.counts[i] });
+  const steps = 140;
+  for (let i = 0; i <= steps; i++) {
+    const x = h.lo - h.w + (h.hi - h.lo + 2 * h.w) * (i / steps);
+    const y = res.sd > 0 ? Math.exp(-0.5 * Math.pow((x - res.mean) / res.sd, 2)) / (res.sd * Math.sqrt(2 * Math.PI)) * res.n * h.w : 0;
+    curve.push({ x: x, y: y });
+  }
+  makeChart('hist', 'c-hist', {
+    data: {
+      datasets: [
+        { type: 'bar', label: 'Count', data: bars, backgroundColor: 'rgba(90,200,222,.42)', borderColor: 'rgba(90,200,222,.75)', borderWidth: 1, parsing: false, barPercentage: 1, categoryPercentage: 1, order: 2 },
+        { type: 'line', label: 'Normal fit', data: curve, borderColor: C.cu, borderWidth: 1.5, pointRadius: 0, parsing: false, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { type: 'linear', grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick, maxTicksLimit: 9, callback: v => fmt(v, 2) }, title: { display: true, text: res.valueCol, color: C.tick, font: { size: 9 } } },
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Frequency', color: C.tick, font: { size: 9 } } }
+      },
+      plugins: {
+        tooltip: { callbacks: { title: it => fmt(it[0].raw.x, 4), label: it => it.dataset.label + ': ' + fmt(it.raw.y, 1) } },
+        vlines: {
+          lines: [
+            { v: res.mean, color: C.cu, text: 'Mean' },
+            { v: res.spec.lsl, color: C.violet, text: 'LSL', dash: [6, 4] },
+            { v: res.spec.usl, color: C.violet, text: 'USL', dash: [6, 4] },
+            { v: res.spec.target, color: 'rgba(174,186,201,.65)', text: 'Target', dash: [3, 3] },
+            { v: res.mean - 3 * res.sigmaWithin, color: 'rgba(255,95,86,.65)', text: '−3σ', dash: [2, 3] },
+            { v: res.mean + 3 * res.sigmaWithin, color: 'rgba(255,95,86,.65)', text: '+3σ', dash: [2, 3] }
+          ]
+        }
+      }
+    }
+  });
+}
+// vertical reference lines for histograms
+const vlinePlugin = {
+  id: 'vlines',
+  afterDatasetsDraw(chart) {
+    const o = chart.options.plugins && chart.options.plugins.vlines;
+    if (!o || !o.lines) return;
+    const { ctx, chartArea: a, scales } = chart;
+    if (!scales.x) return;
+    ctx.save();
+    o.lines.forEach(l => {
+      if (l.v === null || l.v === undefined || !isFinite(l.v)) return;
+      const p = scales.x.getPixelForValue(l.v);
+      if (p < a.left || p > a.right) return;
+      ctx.setLineDash(l.dash || []);
+      ctx.strokeStyle = l.color; ctx.lineWidth = 1.25;
+      ctx.beginPath(); ctx.moveTo(p, a.top); ctx.lineTo(p, a.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = l.color; ctx.font = "500 9px 'IBM Plex Mono',monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(l.text, p, a.top + 3);
+    });
+    ctx.restore();
+  }
+};
+if (typeof Chart !== 'undefined') Chart.register(vlinePlugin);
+
+function drawCapByGroup(res) {
+  const g = res.groups;
+  const spec = res.spec;
+  if (!g.length || (spec.lsl === null && spec.usl === null)) {
+    killChart('capgrp');
+    return;
+  }
+  const labels = [], data = [], colors = [];
+  const limit = Math.min(g.length, 120);
+  const step = g.length / limit;
+  for (let i = 0; i < limit; i++) {
+    const grp = g[Math.floor(i * step)];
+    if (!grp || grp.sd <= 0) continue;
+    const c = capability(grp.mean, grp.sd, grp.sd, spec.lsl, spec.usl);
+    if (c.cpk === null) continue;
+    labels.push(String(grp.label));
+    data.push(c.cpk);
+    colors.push(c.cpk >= 1.33 ? C.ok : (c.cpk >= 1 ? C.warn : C.alert));
+  }
+  makeChart('capgrp', 'c-capgrp', {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Cpk', data: data, backgroundColor: colors, borderWidth: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.tick, maxRotation: 60, autoSkipPadding: 8 } },
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Cpk', color: C.tick, font: { size: 9 } } }
+      },
+      plugins: { tooltip: { callbacks: { label: it => 'Cpk ' + fmt(it.raw, 2) } } }
+    }
+  });
+}
+
+/* ---------------------------------------------------------------
+   Rules view
+   --------------------------------------------------------------- */
+function renderRuleList(res) {
+  const host = $('#rule-list');
+  host.innerHTML = RULES.map(r => {
+    const count = res ? (res.ruleCounts[r.id] || 0) : 0;
+    const on = !!APP.rules[r.id];
+    return '<div class="rule"><label class="switch"><input type="checkbox" data-rule="' + r.id + '"' + (on ? ' checked' : '') +
+      ' aria-label="Rule ' + r.id + '"><i></i></label><div class="meta"><b>Rule ' + r.id + ' · ' + esc(r.name) + '</b><span>' + esc(r.desc) + '</span></div>' +
+      '<div class="count ' + (on && count ? (count > 20 ? 'v bad' : 'v warn') : '') + '">' + (on ? fmtInt(count) : '—') + '</div></div>';
+  }).join('');
+  $$('#rule-list input[data-rule]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      APP.rules[cb.dataset.rule] = cb.checked;
+      refresh();
+    });
+  });
+}
+function renderViolations(res) {
+  const host = $('#viol-table');
+  if (!res || !res.hits.size) {
+    host.innerHTML = '<div class="empty">No points broke the enabled rules. That is a stable process by these criteria.</div>';
+    $('#viol-hint').textContent = res ? '0 of ' + fmtInt(res.n) + ' points flagged' : '—';
+    return;
+  }
+  const entries = [];
+  res.hits.forEach((ids, i) => entries.push([i, ids]));
+  entries.sort((a, b) => a[0] - b[0]);
+  const show = entries.slice(0, 500);
+  const unit = res.spec.unit || '';
+  let html = '<table><thead><tr><th>Point</th><th class="txt">Label</th><th class="num">Value' + (unit ? ' (' + esc(unit) + ')' : '') + '</th><th class="num">Z (σ)</th><th class="txt">Rules</th><th class="txt">Out of spec</th></tr></thead><tbody>';
+  show.forEach(([i, ids]) => {
+    const v = res.values[i];
+    const z = (v - res.mean) / (res.sigmaWithin || 1);
+    const oos = (res.spec.lsl !== null && v < res.spec.lsl) ? 'Below LSL' : ((res.spec.usl !== null && v > res.spec.usl) ? 'Above USL' : '');
+    html += '<tr><td>' + fmtInt(i + 1) + '</td><td class="txt">' + esc(res.series.labels[i]) + '</td>' +
+      '<td class="num">' + fmt(v, 4) + '</td><td class="num" style="color:' + (Math.abs(z) > 3 ? C.alert : C.warn) + '">' + fmt(z, 2) + '</td>' +
+      '<td class="txt">' + ids.map(id => '<span class="pill bad" style="margin-right:4px">R' + id + '</span>').join('') + '</td>' +
+      '<td class="txt" style="color:' + (oos ? C.alert : 'var(--muted)') + '">' + (oos || '—') + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  host.innerHTML = html;
+  $('#viol-hint').textContent = fmtInt(res.hits.size) + ' of ' + fmtInt(res.n) + ' points flagged (' +
+    fmt(res.hits.size / res.n * 100, 2) + '%)' + (entries.length > 500 ? ' · showing the first 500' : '');
+}
+
+/* ---------------------------------------------------------------
+   Readout rail
+   --------------------------------------------------------------- */
+function renderReadout(res) {
+  if (!res) {
+    $('#ro-param').textContent = '—'; $('#ro-n').textContent = '0';
+    ['#ro-mean', '#ro-sigma', '#ro-cpk', '#ro-ooc'].forEach(s => { $(s).textContent = '—'; $(s).className = 'v'; });
+    return;
+  }
+  const unit = res.spec.unit ? '<small>' + esc(res.spec.unit) + '</small>' : '';
+  $('#ro-param').textContent = res.valueCol;
+  $('#ro-n').textContent = fmtInt(res.n);
+  $('#ro-mean').innerHTML = fmt(res.mean, 3) + unit;
+  $('#ro-sigma').innerHTML = fmt(res.sigmaWithin, 4) + unit;
+  const cpk = res.cap.cpk;
+  const cpkEl = $('#ro-cpk');
+  cpkEl.textContent = cpk === null ? '—' : fmt(cpk, 2);
+  cpkEl.className = 'v ' + (cpk === null ? '' : (cpk >= 1.33 ? 'ok' : (cpk >= 1 ? 'warn' : 'bad')));
+  const oocEl = $('#ro-ooc');
+  oocEl.textContent = fmtInt(res.oocCount);
+  oocEl.className = 'v ' + (res.oocCount === 0 ? 'ok' : (res.oocCount / res.n < 0.01 ? 'warn' : 'bad'));
+}
+
+/* ---------------------------------------------------------------
+   DOE — analysis of factors present in the data
+   --------------------------------------------------------------- */
+function populateDoeColumns() {
+  const ds = APP.A; if (!ds) return;
+  fillSelect($('#doe-resp'), ds.numeric, APP.map.value, null);
+  const facs = ds.categorical.concat(ds.numeric.filter(c => ds.categorical.indexOf(c) < 0 && levelCount(ds, c) <= 6));
+  const uniq = facs.filter((c, i) => facs.indexOf(c) === i && c !== APP.map.value);
+  const sel = $('#doe-factors');
+  sel.innerHTML = uniq.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  const preferred = ['Tool', 'Stencil Opening', 'Reflow Peak', 'Underfill Material'];
+  Array.from(sel.options).forEach(o => { if (preferred.indexOf(o.value) >= 0) o.selected = true; });
+  fillSelect($('#doe-ia'), uniq, uniq[0] || '', null);
+  fillSelect($('#doe-ib'), uniq, uniq[1] || '', null);
+}
+function levelCount(ds, col) {
+  const seen = {};
+  let n = 0;
+  for (let i = 0; i < ds.rows.length && n < 40; i++) {
+    const v = ds.rows[i][col];
+    if (v === null || v === undefined || v === '') continue;
+    if (!(v in seen)) { seen[v] = 1; n++; }
+  }
+  return n;
+}
+function factorMeans(ds, factor, response) {
+  const acc = new Map();
+  for (let i = 0; i < ds.rows.length; i++) {
+    const r = ds.rows[i];
+    const lv = r[factor];
+    if (lv === null || lv === undefined || lv === '') continue;
+    let y = r[response];
+    if (typeof y !== 'number') { if (y === null || y === undefined || y === '') continue; y = Number(y); }
+    if (!isFinite(y)) continue;
+    const key = String(lv);
+    let a = acc.get(key);
+    if (!a) { a = { n: 0, sum: 0, sumsq: 0 }; acc.set(key, a); }
+    a.n++; a.sum += y; a.sumsq += y * y;
+  }
+  const levels = Array.from(acc.keys()).sort((a, b) => {
+    const na = Number(a), nb = Number(b);
+    return isFinite(na) && isFinite(nb) ? na - nb : a.localeCompare(b);
+  });
+  return levels.map(l => {
+    const a = acc.get(l);
+    const mean = a.sum / a.n;
+    const varr = a.n > 1 ? Math.max(0, (a.sumsq - a.n * mean * mean) / (a.n - 1)) : 0;
+    return { level: l, n: a.n, mean: mean, sd: Math.sqrt(varr) };
+  });
+}
+function runDOE() {
+  const ds = APP.A;
+  if (!ds) return toast('Load data first.', true);
+  const resp = $('#doe-resp').value;
+  const factors = Array.from($('#doe-factors').selectedOptions).map(o => o.value).slice(0, 6);
+  if (!resp || !factors.length) return toast('Pick a response and at least one factor.', true);
+
+  const host = $('#doe-charts');
+  host.innerHTML = '';
+  Object.keys(APP.charts).filter(k => k.indexOf('me-') === 0).forEach(killChart);
+  const grand = ST.mean(Array.from(ds.rows.map(r => Number(r[resp])).filter(isFinite)));
+  const effects = [];
+
+  factors.forEach((f, fi) => {
+    const levels = factorMeans(ds, f, resp);
+    if (levels.length < 2) return;
+    const lo = levels[0], hi = levels[levels.length - 1];
+    const range = Math.max.apply(null, levels.map(l => l.mean)) - Math.min.apply(null, levels.map(l => l.mean));
+    effects.push({ factor: f, effect: hi.mean - lo.mean, range: range, levels: levels });
+
+    const id = 'me-' + fi;
+    const card = document.createElement('div');
+    card.innerHTML = '<div style="font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">' +
+      esc(f) + '</div><div class="chart-box short"><canvas id="c-' + id + '"></canvas></div>';
+    host.appendChild(card);
+    makeChart(id, 'c-' + id, {
+      type: 'line',
+      data: {
+        labels: levels.map(l => l.level),
+        datasets: [{
+          label: resp, data: levels.map(l => l.mean),
+          borderColor: C.cu, backgroundColor: C.cu, borderWidth: 2, pointRadius: 4, tension: 0
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        scales: {
+          x: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.tick, maxRotation: 30 } },
+          y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick, maxTicksLimit: 6, callback: v => fmt(v, 2) } }
+        },
+        plugins: {
+          tooltip: { callbacks: { label: it => 'Mean ' + fmt(it.raw, 4) + ' · n = ' + fmtInt(levels[it.dataIndex].n) } },
+          vlines: null,
+          zones: { cl: grand, sigma: 0, mode: 'none', showLimits: false }
+        }
+      }
+    });
+  });
+
+  effects.sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect));
+  $('#doe-out').hidden = false;
+  $('#doe-hint').textContent = 'Response: ' + resp + ' · grand mean ' + fmt(grand, 4) +
+    ' · strongest factor: ' + (effects[0] ? effects[0].factor + ' (Δ ' + fmt(effects[0].effect, 4) + ')' : '—');
+
+  $('#doe-pareto-panel').hidden = false;
+  makeChart('pareto', 'c-pareto', {
+    type: 'bar',
+    data: {
+      labels: effects.map(e => e.factor),
+      datasets: [{ label: 'Effect', data: effects.map(e => Math.abs(e.effect)), backgroundColor: effects.map((e, i) => i === 0 ? C.cu : 'rgba(90,200,222,.7)'), borderWidth: 0 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: '|effect| on ' + resp, color: C.tick, font: { size: 9 } } },
+        y: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.text } }
+      },
+      plugins: { tooltip: { callbacks: { label: it => 'Effect ' + fmt(effects[it.dataIndex].effect, 4) + ' · spread ' + fmt(effects[it.dataIndex].range, 4) } } }
+    }
+  });
+  drawInteraction(resp);
+}
+
+function drawInteraction(resp) {
+  const ds = APP.A;
+  const fa = $('#doe-ia').value, fb = $('#doe-ib').value;
+  if (!ds || !fa || !fb || fa === fb) { $('#doe-ia-panel').hidden = true; return; }
+  const cells = new Map();
+  for (let i = 0; i < ds.rows.length; i++) {
+    const r = ds.rows[i];
+    const a = r[fa], b = r[fb];
+    if (a === null || a === undefined || a === '' || b === null || b === undefined || b === '') continue;
+    let y = Number(r[resp]);
+    if (!isFinite(y)) continue;
+    const key = String(a) + '\u0000' + String(b);
+    let c = cells.get(key);
+    if (!c) { c = { n: 0, sum: 0 }; cells.set(key, c); }
+    c.n++; c.sum += y;
+  }
+  const aLev = [], bLev = [];
+  cells.forEach((c, k) => {
+    const p = k.split('\u0000');
+    if (aLev.indexOf(p[0]) < 0) aLev.push(p[0]);
+    if (bLev.indexOf(p[1]) < 0) bLev.push(p[1]);
+  });
+  aLev.sort(); bLev.sort();
+  if (aLev.length > 12 || bLev.length > 8) { $('#doe-ia-panel').hidden = true; return; }
+  const palette = [C.cu, C.probe, C.ok, C.violet, C.warn, C.alert, '#8AA0B8', '#D08BC0'];
+  const datasets = bLev.map((b, i) => ({
+    label: fb + ' = ' + b,
+    data: aLev.map(a => {
+      const c = cells.get(a + '\u0000' + b);
+      return c ? c.sum / c.n : null;
+    }),
+    borderColor: palette[i % palette.length], backgroundColor: palette[i % palette.length],
+    borderWidth: 2, pointRadius: 4, tension: 0, spanGaps: true
+  }));
+  $('#doe-ia-panel').hidden = false;
+  makeChart('ia', 'c-ia', {
+    type: 'line',
+    data: { labels: aLev, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 2, color: C.text } } },
+      scales: {
+        x: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: fa, color: C.tick, font: { size: 9 } } },
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick, callback: v => fmt(v, 2) }, title: { display: true, text: 'Mean ' + resp, color: C.tick, font: { size: 9 } } }
+      }
+    }
+  });
+  // parallel lines mean little interaction; report the spread of differences
+  let maxGap = 0, minGap = Infinity;
+  aLev.forEach(a => {
+    const vals = bLev.map(b => { const c = cells.get(a + '\u0000' + b); return c ? c.sum / c.n : null; }).filter(v => v !== null);
+    if (vals.length > 1) {
+      const g = Math.max.apply(null, vals) - Math.min.apply(null, vals);
+      if (g > maxGap) maxGap = g;
+      if (g < minGap) minGap = g;
+    }
+  });
+  $('#ia-hint').textContent = isFinite(minGap)
+    ? 'Gap between ' + fb + ' levels ranges ' + fmt(minGap, 3) + ' to ' + fmt(maxGap, 3) + ' across ' + fa +
+      (maxGap - minGap > 0.35 * maxGap ? ' — lines are not parallel, so the factors interact.' : ' — near-parallel lines, little interaction.')
+    : '—';
+}
+
+/* ---------------------------------------------------------------
+   DOE — design generator
+   --------------------------------------------------------------- */
+const GENERATORS = {
+  // k factors -> {p: fraction exponent, gens: [[targetIndex, [source indices]]], resolution}
+  '3-1': { res: 'III', gens: [[2, [0, 1]]] },
+  '4-1': { res: 'IV', gens: [[3, [0, 1, 2]]] },
+  '5-1': { res: 'V', gens: [[4, [0, 1, 2, 3]]] },
+  '5-2': { res: 'III', gens: [[3, [0, 1]], [4, [0, 2]]] },
+  '6-1': { res: 'VI', gens: [[5, [0, 1, 2, 3, 4]]] },
+  '6-2': { res: 'IV', gens: [[4, [0, 1, 2]], [5, [1, 2, 3]]] },
+  '6-3': { res: 'III', gens: [[3, [0, 1]], [4, [0, 2]], [5, [1, 2]]] },
+  '7-1': { res: 'VII', gens: [[6, [0, 1, 2, 3, 4, 5]]] },
+  '7-2': { res: 'IV', gens: [[5, [0, 1, 2, 3]], [6, [0, 1, 2, 4]]] },
+  '7-3': { res: 'IV', gens: [[4, [0, 1, 2]], [5, [0, 1, 3]], [6, [0, 2, 3]]] },
+  '7-4': { res: 'III', gens: [[3, [0, 1]], [4, [0, 2]], [5, [1, 2]], [6, [0, 1, 2]]] }
+};
+function designOptions(k) {
+  const opts = [{ v: '0', t: 'Full factorial 2^' + k + ' (' + Math.pow(2, k) + ' runs)' }];
+  for (let p = 1; p <= 4; p++) {
+    const key = k + '-' + p;
+    if (GENERATORS[key] && Math.pow(2, k - p) >= 4) {
+      opts.push({ v: String(p), t: 'Fractional 2^(' + k + '−' + p + ') · ' + Math.pow(2, k - p) + ' runs · Res ' + GENERATORS[key].res });
+    }
+  }
+  return opts;
+}
+function refreshDesignControls() {
+  const k = Math.max(2, Math.min(7, Number($('#dg-k').value) || 4));
+  const sel = $('#dg-type');
+  const cur = sel.value;
+  const opts = designOptions(k);
+  sel.innerHTML = opts.map(o => '<option value="' + o.v + '">' + esc(o.t) + '</option>').join('');
+  if (opts.some(o => o.v === cur)) sel.value = cur;
+  const host = $('#dg-names');
+  const existing = {};
+  $$('#dg-names input').forEach(i => { existing[i.dataset.f] = i.value; });
+  const defaults = ['Reflow Peak (C)', 'Stencil Opening (um)', 'Underfill Material', 'Bond Force (gf)', 'Plasma Time (s)', 'Cure Temp (C)', 'Flux Volume (mg)'];
+  let html = '';
+  for (let i = 0; i < k; i++) {
+    const letter = String.fromCharCode(65 + i);
+    html += '<label class="fld"><span>Factor ' + letter + '</span><input type="text" data-f="' + i + '" value="' +
+      esc(existing[i] || defaults[i] || ('Factor ' + letter)) + '"></label>';
+  }
+  host.innerHTML = html;
+}
+function generateDesign() {
+  const k = Math.max(2, Math.min(7, Number($('#dg-k').value) || 4));
+  const p = Number($('#dg-type').value) || 0;
+  const centers = Math.max(0, Math.min(10, Number($('#dg-center').value) || 0));
+  const reps = Math.max(1, Math.min(5, Number($('#dg-rep').value) || 1));
+  const names = $$('#dg-names input').map(i => i.value.trim() || i.dataset.f);
+  const base = k - p;
+  const runs = [];
+  for (let r = 0; r < Math.pow(2, base); r++) {
+    const row = [];
+    for (let c = 0; c < base; c++) row.push((r >> c) & 1 ? 1 : -1);
+    if (p > 0) {
+      const g = GENERATORS[k + '-' + p];
+      g.gens.forEach(([target, src]) => {
+        let v = 1;
+        src.forEach(s => { v *= row[s]; });
+        row[target] = v;
+      });
+    }
+    runs.push(row.slice(0, k));
+  }
+  let all = [];
+  for (let r = 0; r < reps; r++) all = all.concat(runs.map(x => x.slice()));
+  for (let c = 0; c < centers; c++) all.push(new Array(k).fill(0));
+  // randomize run order
+  const rnd = makeRng(Date.now() >>> 0);
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    const t = all[i]; all[i] = all[j]; all[j] = t;
+  }
+  APP.design = { names: names, runs: all, k: k, p: p };
+  const res = p === 0 ? 'Full' : GENERATORS[k + '-' + p].res;
+  $('#dg-res').textContent = all.length + ' runs · resolution ' + res;
+  $('#dg-res').className = 'pill ' + (p === 0 || res === 'V' || res === 'VI' || res === 'VII' ? 'ok' : (res === 'IV' ? 'cu' : 'warn'));
+  let html = '<table><thead><tr><th>Run</th><th>Std order</th>' + names.map(n => '<th class="txt">' + esc(n) + '</th>').join('') +
+    '<th class="txt">Response</th></tr></thead><tbody>';
+  all.forEach((row, i) => {
+    html += '<tr><td>' + (i + 1) + '</td><td style="color:var(--muted)">' + (i + 1) + '</td>' +
+      row.map(v => '<td class="num" style="color:' + (v === 0 ? C.warn : (v > 0 ? C.ok : C.probe)) + '">' + (v > 0 ? '+1' : (v < 0 ? '−1' : '0')) + '</td>').join('') +
+      '<td style="color:var(--muted)">—</td></tr>';
+  });
+  html += '</tbody></table>';
+  $('#dg-table').innerHTML = html;
+  toast('Generated a ' + all.length + '-run design.');
+}
+function exportDesign() {
+  if (!APP.design) return toast('Generate a design first.', true);
+  const rows = [['Run'].concat(APP.design.names).concat(['Response'])];
+  APP.design.runs.forEach((r, i) => rows.push([i + 1].concat(r.map(v => v > 0 ? 1 : (v < 0 ? -1 : 0))).concat([''])));
+  downloadText('doe-run-sheet.csv', toCSV(rows));
+}
+
+/* ---------------------------------------------------------------
+   Before vs after
+   --------------------------------------------------------------- */
+function setDatasetB(ds) {
+  APP.B = ds;
+  $('#cmp-b-name').textContent = ds.name + ' · ' + fmtInt(ds.rows.length) + ' rows';
+  $('#cmp-b-name').className = 'pill ok';
+  renderCompare();
+  toast('Loaded "after" dataset: ' + ds.name);
+}
+function deltaCell(before, after, higherIsBetter, dec) {
+  if (before === null || after === null || !isFinite(before) || !isFinite(after)) return '<td class="num">—</td>';
+  const d = after - before;
+  const good = higherIsBetter ? d > 0 : d < 0;
+  const color = Math.abs(d) < 1e-12 ? 'var(--muted)' : (good ? C.ok : C.alert);
+  const arrow = Math.abs(d) < 1e-12 ? '' : (d > 0 ? '▲ ' : '▼ ');
+  return '<td class="num" style="color:' + color + '">' + arrow + fmt(Math.abs(d), dec === undefined ? 3 : dec) + '</td>';
+}
+function renderCompare() {
+  const host = $('#cmp-table');
+  if (!APP.A || !APP.B) {
+    host.innerHTML = '<div class="empty">Load a second dataset to compare.</div>';
+    return;
+  }
+  const col = APP.map.value;
+  if (APP.B.numeric.indexOf(col) < 0) {
+    host.innerHTML = '<div class="empty">The "after" file has no column named <b>' + esc(col) + '</b>. Pick a parameter both files share.</div>';
+    return;
+  }
+  const a = analyze(APP.A, {});
+  const b = analyze(APP.B, { group: APP.B.categorical.indexOf(APP.map.group) >= 0 ? APP.map.group : '', order: '', filter: '', filterVal: '' });
+  if (!a || !b) { host.innerHTML = '<div class="empty">Not enough numeric data to compare.</div>'; return; }
+
+  const rows = [
+    ['Points', fmtInt(a.n), fmtInt(b.n), '<td class="num">' + fmtInt(b.n - a.n) + '</td>'],
+    ['Mean', fmt(a.mean, 4), fmt(b.mean, 4), deltaCell(a.mean, b.mean, null, 4)],
+    ['Sigma (within)', fmt(a.sigmaWithin, 4), fmt(b.sigmaWithin, 4), deltaCell(a.sigmaWithin, b.sigmaWithin, false, 4)],
+    ['Sigma (overall)', fmt(a.sd, 4), fmt(b.sd, 4), deltaCell(a.sd, b.sd, false, 4)],
+    ['Range', fmt(a.max - a.min, 4), fmt(b.max - b.min, 4), deltaCell(a.max - a.min, b.max - b.min, false, 4)],
+    ['Cp', fmt(a.cap.cp, 2), fmt(b.cap.cp, 2), deltaCell(a.cap.cp, b.cap.cp, true, 2)],
+    ['Cpk', fmt(a.cap.cpk, 2), fmt(b.cap.cpk, 2), deltaCell(a.cap.cpk, b.cap.cpk, true, 2)],
+    ['Pp', fmt(a.cap.pp, 2), fmt(b.cap.pp, 2), deltaCell(a.cap.pp, b.cap.pp, true, 2)],
+    ['Ppk', fmt(a.cap.ppk, 2), fmt(b.cap.ppk, 2), deltaCell(a.cap.ppk, b.cap.ppk, true, 2)],
+    ['Sigma level', fmt(a.cap.sigmaLevel, 2), fmt(b.cap.sigmaLevel, 2), deltaCell(a.cap.sigmaLevel, b.cap.sigmaLevel, true, 2)],
+    ['PPM (predicted)', a.cap.ppm === null ? '—' : fmtInt(a.cap.ppm), b.cap.ppm === null ? '—' : fmtInt(b.cap.ppm), deltaCell(a.cap.ppm, b.cap.ppm, false, 0)],
+    ['Out-of-control points', fmtInt(a.oocCount), fmtInt(b.oocCount), deltaCell(a.oocCount, b.oocCount, false, 0)],
+    ['Out-of-control rate', fmt(a.oocCount / a.n * 100, 2) + '%', fmt(b.oocCount / b.n * 100, 2) + '%', deltaCell(a.oocCount / a.n * 100, b.oocCount / b.n * 100, false, 2)]
+  ];
+  RULES.forEach(r => {
+    if (!APP.rules[r.id]) return;
+    rows.push(['Rule ' + r.id + ' hits', fmtInt(a.ruleCounts[r.id]), fmtInt(b.ruleCounts[r.id]), deltaCell(a.ruleCounts[r.id], b.ruleCounts[r.id], false, 0)]);
+  });
+
+  host.innerHTML = '<table><thead><tr><th class="txt">Metric</th><th class="num">Before (A)</th><th class="num">After (B)</th><th class="num">Change</th></tr></thead><tbody>' +
+    rows.map(r => '<tr><td class="txt">' + esc(r[0]) + '</td><td class="num">' + r[1] + '</td><td class="num">' + r[2] + '</td>' + r[3] + '</tr>').join('') +
+    '</tbody></table>';
+
+  const cpkShift = (a.cap.cpk !== null && b.cap.cpk !== null) ? b.cap.cpk - a.cap.cpk : null;
+  const sigRed = a.sigmaWithin > 0 ? (1 - b.sigmaWithin / a.sigmaWithin) * 100 : null;
+  $('#cmp-hint').textContent = 'Parameter: ' + col +
+    (cpkShift !== null ? ' · Cpk ' + (cpkShift >= 0 ? '+' : '−') + fmt(Math.abs(cpkShift), 2) : '') +
+    (sigRed !== null ? ' · variation ' + (sigRed >= 0 ? 'down ' : 'up ') + fmt(Math.abs(sigRed), 1) + '%' : '') +
+    ' · out-of-control ' + fmtInt(a.oocCount) + ' → ' + fmtInt(b.oocCount);
+
+  // overlaid distributions
+  const all = new Float64Array(a.n + b.n);
+  all.set(a.values, 0); all.set(b.values, a.n);
+  const bins = 40;
+  const h = histogramData(all, bins);
+  const cA = new Float64Array(bins), cB = new Float64Array(bins);
+  const bin = v => { let x = Math.floor((v - h.lo) / h.w); if (x < 0) x = 0; if (x >= bins) x = bins - 1; return x; };
+  for (let i = 0; i < a.n; i++) cA[bin(a.values[i])]++;
+  for (let i = 0; i < b.n; i++) cB[bin(b.values[i])]++;
+  const labels = [];
+  for (let i = 0; i < bins; i++) labels.push(fmt(h.lo + h.w * (i + 0.5), 2));
+  makeChart('cmpHist', 'c-cmp-hist', {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Before', data: Array.from(cA).map(x => x / a.n * 100), backgroundColor: 'rgba(196,112,58,.55)', borderWidth: 0 },
+        { label: 'After', data: Array.from(cB).map(x => x / b.n * 100), backgroundColor: 'rgba(90,200,222,.55)', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, color: C.text } } },
+      scales: {
+        x: { stacked: false, grid: { display: false }, border: { color: C.line }, ticks: { color: C.tick, maxTicksLimit: 10 } },
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: '% of points', color: C.tick, font: { size: 9 } } }
+      }
+    }
+  });
+  makeChart('cmpBar', 'c-cmp-bar', {
+    type: 'bar',
+    data: {
+      labels: ['Cp', 'Cpk', 'Pp', 'Ppk', 'Sigma level'],
+      datasets: [
+        { label: 'Before', data: [a.cap.cp, a.cap.cpk, a.cap.pp, a.cap.ppk, a.cap.sigmaLevel], backgroundColor: C.cu, borderWidth: 0 },
+        { label: 'After', data: [b.cap.cp, b.cap.cpk, b.cap.pp, b.cap.ppk, b.cap.sigmaLevel], backgroundColor: C.probe, borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, color: C.text } } },
+      scales: {
+        x: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.text } },
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick } }
+      }
+    }
+  });
+}
+function splitDatasetA() {
+  if (!APP.A) return toast('Load data first.', true);
+  const rows = APP.A.rows;
+  const half = Math.floor(rows.length / 2);
+  if (half < 10) return toast('Not enough rows to split.', true);
+  const first = buildDataset(APP.A.name + ' (first half)', rows.slice(0, half));
+  const second = buildDataset(APP.A.name + ' (second half)', rows.slice(half));
+  APP.A = first;
+  $('#cmp-a-name').textContent = first.name;
+  $('#load-hint').textContent = first.name + ' · ' + fmtInt(first.rows.length) + ' rows';
+  setDatasetB(second);
+  renderPreview();
+  refresh();
+}
+
+/* ---------------------------------------------------------------
+   Trend forecasting and the Cpk roadmap
+   --------------------------------------------------------------- */
+function renderForecast(res) {
+  if (!res) return;
+  const win = Math.max(20, Math.min(5000, Number($('#fc-win').value) || 100));
+  const ahead = Math.max(1, Math.min(50, Number($('#fc-ahead').value) || 8));
+  const goal = Math.max(0.3, Number($('#fc-goal').value) || 1.67);
+  const spec = res.spec;
+  const v = res.values;
+  const nWin = Math.floor(v.length / win);
+
+  if (nWin < 3) {
+    killChart('fc'); killChart('drift');
+    $('#fc-hint').textContent = 'Need at least three full windows. Lower the window size or load more data.';
+    $('#fc-road').innerHTML = '<div class="empty">Not enough data for a trend.</div>';
+    return;
+  }
+  const cpks = [], means = [], sds = [], xs = [];
+  for (let w = 0; w < nWin; w++) {
+    const seg = v.subarray(w * win, (w + 1) * win);
+    const st = ST.meanSd(seg);
+    const mr = ST.movingRange(seg);
+    const sw = mr.length ? ST.mean(mr) / D2[2] : st.sd;
+    const c = capability(st.mean, sw || st.sd, st.sd, spec.lsl, spec.usl);
+    xs.push(w);
+    means.push(st.mean);
+    sds.push(sw || st.sd);
+    cpks.push(c.cpk === null ? null : c.cpk);
+  }
+  const valid = xs.filter(i => cpks[i] !== null && isFinite(cpks[i]));
+  const fit = valid.length > 2 ? ST.linreg(valid, valid.map(i => cpks[i])) : null;
+
+  const histData = xs.map(i => ({ x: i, y: cpks[i] }));
+  const projData = [];
+  if (fit) {
+    for (let i = nWin - 1; i < nWin + ahead; i++) projData.push({ x: i, y: fit.intercept + fit.slope * i });
+  }
+  const datasets = [
+    { label: 'Rolling Cpk', data: histData, borderColor: C.probe, backgroundColor: C.probe, borderWidth: 1.75, pointRadius: 3, tension: .15, parsing: false, spanGaps: true }
+  ];
+  if (projData.length) {
+    datasets.push({ label: 'Projection', data: projData, borderColor: C.cu, backgroundColor: C.cu, borderWidth: 1.75, borderDash: [6, 4], pointRadius: 2, parsing: false });
+  }
+  makeChart('fc', 'c-fc', {
+    type: 'line',
+    data: { datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 2, color: C.text } },
+        tooltip: { callbacks: { title: it => 'Window ' + fmtInt(it[0].raw.x + 1), label: it => it.dataset.label + ': ' + fmt(it.raw.y, 3) } },
+        zones: { cl: goal, sigma: 0, mode: 'none', showLimits: false, clLabel: 'Goal', usl: null, lsl: null, target: null }
+      },
+      scales: {
+        x: { type: 'linear', grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick, callback: v2 => 'W' + fmtInt(v2 + 1) }, title: { display: true, text: 'Window of ' + win + ' measurements', color: C.tick, font: { size: 9 } } },
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Cpk', color: C.tick, font: { size: 9 } } }
+      }
+    }
+  });
+  if (fit) {
+    const last = fit.intercept + fit.slope * (nWin - 1 + ahead);
+    const dir = fit.slope > 0.0005 ? 'improving' : (fit.slope < -0.0005 ? 'degrading' : 'flat');
+    let reach = '';
+    if (fit.slope > 0 && cpks[nWin - 1] !== null) {
+      const need = (goal - fit.intercept) / fit.slope - (nWin - 1);
+      if (need > 0) reach = ' · reaches the ' + fmt(goal, 2) + ' goal in about ' + Math.ceil(need) + ' windows (~' + fmtInt(Math.ceil(need) * win) + ' units) if the trend holds';
+    } else if (fit.slope < 0) {
+      reach = ' · moving away from the goal';
+    }
+    $('#fc-hint').textContent = 'Trend is ' + dir + ' at ' + fmt(fit.slope, 4) + ' Cpk per window (R² ' + fmt(fit.r2, 2) + ') · projected Cpk in ' + ahead + ' windows: ' + fmt(last, 2) + reach;
+  } else {
+    $('#fc-hint').textContent = 'Set spec limits to see a Cpk trend.';
+  }
+
+  makeChart('drift', 'c-drift', {
+    type: 'line',
+    data: {
+      labels: xs.map(i => 'W' + (i + 1)),
+      datasets: [
+        { label: 'Window mean', data: means, borderColor: C.cu, backgroundColor: C.cu, borderWidth: 1.75, pointRadius: 2, yAxisID: 'y', tension: .15 },
+        { label: 'Window sigma', data: sds, borderColor: C.warn, backgroundColor: C.warn, borderWidth: 1.75, pointRadius: 2, yAxisID: 'y1', tension: .15 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 2, color: C.text } } },
+      scales: {
+        x: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.tick, maxTicksLimit: 12 } },
+        y: { position: 'left', grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.cu, callback: v2 => fmt(v2, 2) }, title: { display: true, text: 'Mean', color: C.cu, font: { size: 9 } } },
+        y1: { position: 'right', grid: { display: false }, border: { color: C.line }, ticks: { color: C.warn, callback: v2 => fmt(v2, 3) }, title: { display: true, text: 'Sigma', color: C.warn, font: { size: 9 } } }
+      }
+    }
+  });
+
+  // Reduction roadmap
+  const host = $('#fc-road');
+  const cpk = res.cap.cpk;
+  if (cpk === null || !isFinite(cpk) || res.sigmaWithin <= 0) {
+    host.innerHTML = '<div class="empty">Set spec limits to build a roadmap.</div>';
+    return;
+  }
+  const mid = (spec.lsl !== null && spec.usl !== null) ? (spec.lsl + spec.usl) / 2 : (spec.target !== null && spec.target !== undefined ? spec.target : res.mean);
+  const centeredCpk = (spec.lsl !== null && spec.usl !== null) ? (spec.usl - spec.lsl) / (6 * res.sigmaWithin) : cpk;
+  const steps = [];
+  const milestones = [1.0, 1.33, 1.5, 1.67, 2.0].filter(m => m > cpk).slice(0, 4);
+  if (milestones.indexOf(goal) < 0 && goal > cpk) milestones.push(goal);
+  milestones.sort((a2, b2) => a2 - b2);
+  milestones.forEach(m => {
+    const sigNeeded = res.sigmaWithin * cpk / m;
+    const reduce = (1 - sigNeeded / res.sigmaWithin) * 100;
+    const c2 = capability(res.mean, sigNeeded, sigNeeded, spec.lsl, spec.usl);
+    steps.push({
+      goal: m, sigma: sigNeeded, reduce: reduce,
+      ppm: c2.ppm,
+      centering: centeredCpk >= m ? 'Reachable by centering + variation work' : 'Needs real variation reduction'
+    });
+  });
+  if (!steps.length) {
+    host.innerHTML = '<div class="empty">Cpk is already at or above every milestone. Hold the gains and re-baseline the limits.</div>';
+    return;
+  }
+  host.innerHTML = '<table><thead><tr><th class="num">Cpk goal</th><th class="num">Sigma needed</th><th class="num">Variation cut</th><th class="num">PPM at goal</th><th class="txt">Path</th></tr></thead><tbody>' +
+    steps.map(s => '<tr><td class="num" style="color:' + C.cu + '">' + fmt(s.goal, 2) + '</td><td class="num">' + fmt(s.sigma, 4) +
+      '</td><td class="num">' + fmt(s.reduce, 1) + '%</td><td class="num">' + (s.ppm === null ? '—' : (s.ppm < 0.01 ? '&lt;0.01' : fmtInt(s.ppm))) +
+      '</td><td class="txt" style="color:var(--muted)">' + esc(s.centering) + '</td></tr>').join('') +
+    '</tbody></table>' +
+    '<p class="note" style="padding:10px 2px 0">Current: Cpk ' + fmt(cpk, 2) + ', sigma ' + fmt(res.sigmaWithin, 4) +
+    '. Mean is ' + fmt(Math.abs(res.mean - mid), 3) + ' ' + esc(spec.unit || 'units') + ' off the ' +
+    ((spec.target !== null && spec.target !== undefined) ? 'target' : 'spec midpoint') +
+    ', which is worth ' + fmt(Math.max(0, centeredCpk - cpk), 2) + ' Cpk from centering alone.</p>';
+}
+
+/* ---------------------------------------------------------------
+   FMEA
+   --------------------------------------------------------------- */
+const FMEA_SEED = [
+  { item: 'Cu pillar bumping', mode: 'Bump height out of spec', effect: 'Open or weak joint after reflow', cause: 'Plating current density non-uniformity', ctrl: 'Bump height SPC, 100% AOI', s: 8, o: 4, d: 3, param: 'Bump Height (um)', action: 'Anode profile check each PM' },
+  { item: 'Molding / cure', mode: 'Package warpage beyond limit', effect: 'Non-wet joints at board attach', cause: 'CTE mismatch, cure profile drift', ctrl: 'Shadow moire per lot', s: 9, o: 5, d: 4, param: 'Warpage (um)', action: 'Optimize cure ramp, EMC selection' },
+  { item: 'Die attach / placement', mode: 'Die shift beyond placement window', effect: 'RDL to pad misalignment, opens', cause: 'Flux slump, bonder calibration drift', ctrl: 'Post-bond metrology sampling', s: 8, o: 3, d: 4, param: 'Die Shift X (um)', action: 'Daily bonder calibration check' },
+  { item: 'Wire bonding', mode: 'Low wire pull strength', effect: 'Intermittent open in field', cause: 'Contaminated pad, low bond force', ctrl: 'Destructive pull test per shift', s: 9, o: 3, d: 5, param: 'Wire Pull Strength (gf)', action: 'Plasma clean before bond' },
+  { item: 'Solder ball attach', mode: 'Low ball shear strength', effect: 'Ball drop during board level reliability', cause: 'IMC over-growth, flux residue', ctrl: 'Shear test per lot', s: 8, o: 3, d: 4, param: 'Ball Shear Strength (gf)', action: 'Cap reflow cycles, tighten profile' },
+  { item: 'Reflow', mode: 'Solder joint voiding above limit', effect: 'Thermal and electrical degradation', cause: 'Flux outgassing, low peak temp', ctrl: 'X-ray void inspection', s: 6, o: 6, d: 3, param: 'Solder Void (%)', action: 'Vacuum reflow trial, profile DOE' },
+  { item: 'RDL lithography', mode: 'Line width out of spec', effect: 'Resistance shift, opens or shorts', cause: 'Focus/dose drift, develop variation', ctrl: 'CD SEM sampling', s: 7, o: 4, d: 3, param: 'RDL Line Width (um)', action: 'Tighten focus-exposure matrix' },
+  { item: 'TSV fill', mode: 'High via resistance', effect: 'Signal integrity loss, IR drop', cause: 'Void in Cu fill, seed layer thin', ctrl: 'ETEST via chain resistance', s: 9, o: 3, d: 2, param: 'TSV Via Resistance (mOhm)', action: 'Seed thickness monitor, fill additive control' },
+  { item: 'Ball attach / substrate', mode: 'Coplanarity out of spec', effect: 'Non-wet or bridging at SMT', cause: 'Substrate warpage, ball size spread', ctrl: '3D ball inspection', s: 7, o: 4, d: 3, param: 'Coplanarity (um)', action: 'Substrate supplier capability review' },
+  { item: 'Underfill dispense', mode: 'Incomplete fill or entrapped voids', effect: 'Fatigue cracking under thermal cycling', cause: 'Viscosity drift, low preheat', ctrl: 'CSAM sampling, fill time monitor', s: 8, o: 4, d: 5, param: 'Underfill Fill Time (s)', action: 'Material lot qualification, preheat control' }
+];
+function rpnClass(r) { return r >= 200 ? 'hi' : (r >= 100 ? 'mid' : 'lo'); }
+function renderFMEA() {
+  const host = $('#fmea-table');
+  const cols = [
+    ['item', 'Process step', 150], ['mode', 'Failure mode', 190], ['effect', 'Effect', 190],
+    ['cause', 'Cause', 190], ['ctrl', 'Current control', 180], ['param', 'SPC parameter', 160], ['action', 'Recommended action', 200]
+  ];
+  let html = '<table><thead><tr><th>#</th>' + cols.map(c => '<th class="txt">' + c[1] + '</th>').join('') +
+    '<th class="num">S</th><th class="num">O</th><th class="num">D</th><th class="num">RPN</th><th></th></tr></thead><tbody>';
+  APP.fmea.forEach((r, i) => {
+    const rpn = r.s * r.o * r.d;
+    html += '<tr data-i="' + i + '"><td style="color:var(--muted)">' + (i + 1) + '</td>' +
+      cols.map(c => '<td class="txt"><input class="fmea-in" data-f="' + c[0] + '" value="' + esc(r[c[0]] || '') + '" style="min-width:' + c[2] + 'px"></td>').join('') +
+      '<td class="num"><input class="fmea-in sod" type="number" min="1" max="10" data-f="s" value="' + r.s + '"></td>' +
+      '<td class="num"><input class="fmea-in sod" type="number" min="1" max="10" data-f="o" value="' + r.o + '"></td>' +
+      '<td class="num"><input class="fmea-in sod" type="number" min="1" max="10" data-f="d" value="' + r.d + '"></td>' +
+      '<td class="num"><span class="rpn ' + rpnClass(rpn) + '">' + rpn + '</span></td>' +
+      '<td><button class="icon-btn" data-del="' + i + '" title="Delete row" aria-label="Delete row ' + (i + 1) + '">✕</button></td></tr>';
+  });
+  html += '</tbody></table>';
+  host.innerHTML = html;
+
+  $$('#fmea-table input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const tr = inp.closest('tr');
+      const i = Number(tr.dataset.i);
+      const f = inp.dataset.f;
+      if (f === 's' || f === 'o' || f === 'd') {
+        let v = Math.round(Number(inp.value));
+        if (!isFinite(v)) v = 1;
+        v = Math.max(1, Math.min(10, v));
+        APP.fmea[i][f] = v;
+        const rpn = APP.fmea[i].s * APP.fmea[i].o * APP.fmea[i].d;
+        const cell = tr.querySelector('.rpn');
+        cell.textContent = rpn;
+        cell.className = 'rpn ' + rpnClass(rpn);
+        renderFMEAsummary();
+      } else {
+        APP.fmea[i][f] = inp.value;
+      }
+    });
+    inp.addEventListener('blur', () => {
+      const f = inp.dataset.f;
+      if (f === 's' || f === 'o' || f === 'd') {
+        const i = Number(inp.closest('tr').dataset.i);
+        inp.value = APP.fmea[i][f];
+      }
+    });
+  });
+  $$('#fmea-table [data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      APP.fmea.splice(Number(btn.dataset.del), 1);
+      renderFMEA();
+      renderFMEAsummary();
+    });
+  });
+  renderFMEAsummary();
+}
+function renderFMEAsummary() {
+  const rpns = APP.fmea.map(r => r.s * r.o * r.d);
+  const host = $('#fmea-metrics');
+  if (!rpns.length) {
+    host.innerHTML = '<div class="empty" style="grid-column:1/-1">No rows. Add one to start scoring.</div>';
+    killChart('fmea');
+    $('#fmea-hint').textContent = '—';
+    return;
+  }
+  const high = rpns.filter(r => r >= 200).length;
+  const mid = rpns.filter(r => r >= 100 && r < 200).length;
+  const maxSev = Math.max.apply(null, APP.fmea.map(r => r.s));
+  const top = APP.fmea.map((r, i) => ({ r: r, rpn: rpns[i] })).sort((a, b) => b.rpn - a.rpn)[0];
+  host.innerHTML = [
+    metricCard('Failure modes', fmtInt(rpns.length), 'Rows in the worksheet', 'cu'),
+    metricCard('Highest RPN', fmtInt(Math.max.apply(null, rpns)), top.r.mode, rpnClass(Math.max.apply(null, rpns)) === 'hi' ? 'bad' : 'warn'),
+    metricCard('RPN ≥ 200', fmtInt(high), 'Act now', high ? 'bad' : 'ok'),
+    metricCard('RPN 100–199', fmtInt(mid), 'Plan mitigation', mid ? 'warn' : 'ok'),
+    metricCard('Mean RPN', fmt(ST.mean(rpns), 0), 'Across all rows', ''),
+    metricCard('Max severity', fmtInt(maxSev), 'Severity 9–10 needs action regardless of RPN', maxSev >= 9 ? 'bad' : 'ok')
+  ].join('');
+  $('#fmea-hint').textContent = 'Highest risk: ' + top.r.mode + ' (RPN ' + top.rpn + ')';
+
+  const sorted = APP.fmea.map((r, i) => ({ label: r.mode, rpn: rpns[i] })).sort((a, b) => b.rpn - a.rpn).slice(0, 12);
+  makeChart('fmea', 'c-fmea', {
+    type: 'bar',
+    data: {
+      labels: sorted.map(s => s.label.length > 34 ? s.label.slice(0, 33) + '…' : s.label),
+      datasets: [{ label: 'RPN', data: sorted.map(s => s.rpn), backgroundColor: sorted.map(s => s.rpn >= 200 ? C.alert : (s.rpn >= 100 ? C.warn : C.ok)), borderWidth: 0 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Risk priority number', color: C.tick, font: { size: 9 } } },
+        y: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.text, font: { size: 9.5 } } }
+      }
+    }
+  });
+}
+function exportFMEA() {
+  const rows = [['Process step', 'Failure mode', 'Effect', 'Cause', 'Current control', 'SPC parameter', 'Recommended action', 'Severity', 'Occurrence', 'Detection', 'RPN']];
+  APP.fmea.forEach(r => rows.push([r.item, r.mode, r.effect, r.cause, r.ctrl, r.param, r.action, r.s, r.o, r.d, r.s * r.o * r.d]));
+  downloadText('fmea-worksheet.csv', toCSV(rows));
+}
+
+/* ---------------------------------------------------------------
+   Orchestration
+   --------------------------------------------------------------- */
+let refreshTimer = null;
+function refresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(doRefresh, 20);
+}
+function doRefresh() {
+  if (!APP.A) { renderReadout(null); renderRuleList(null); return; }
+  const t0 = performance.now();
+  const res = analyze(APP.A, {});
+  APP.cache = res;
+  renderReadout(res);
+  renderRuleList(res);
+  if (!res) {
+    $('#viol-table').innerHTML = '<div class="empty">No numeric data in that column.</div>';
+    return;
+  }
+  const view = currentView();
+  if (view === 'charts') { drawIChart(res); drawMR(res); drawCUSUM(res); drawEWMA(res); drawXbarR(res); }
+  if (view === 'cap') renderCapability(res);
+  if (view === 'rules') { drawIChart(res, 'c-i-rules', 'irules'); renderViolations(res); }
+  if (view === 'compare') renderCompare();
+  if (view === 'forecast') renderForecast(res);
+  const ms = performance.now() - t0;
+  if (res.n > 20000) console.log('Analyzed ' + res.n + ' rows in ' + ms.toFixed(0) + ' ms');
+}
+function currentView() {
+  const on = $('#nav button.on');
+  return on ? on.dataset.view : 'data';
+}
+function showView(name) {
+  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
+  ['data', 'charts', 'cap', 'rules', 'doe', 'compare', 'forecast', 'fmea'].forEach(v => {
+    const el = $('#view-' + v);
+    if (el) el.hidden = v !== name;
+  });
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  if (name === 'fmea') renderFMEA();
+  doRefresh();
+}
+
+/* ---------------------------------------------------------------
+   Wiring
+   --------------------------------------------------------------- */
+function wireDrop(dropId, inputId, handler) {
+  const drop = $(dropId), input = $(inputId);
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer.files && e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]); });
+  input.addEventListener('change', () => { if (input.files && input.files[0]) handler(input.files[0]); });
+}
+
+function init() {
+  $$('#nav button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+
+  wireDrop('#drop-a', '#file-a', f => readFile(f, 'A', setDatasetA));
+  wireDrop('#drop-b', '#file-b', f => readFile(f, 'B', setDatasetB));
+
+  $('#btn-sample').addEventListener('click', () => {
+    setDatasetA(buildDataset('Sample — advanced packaging line', makeSample(2400)));
+  });
+  $('#btn-stress').addEventListener('click', () => {
+    toast('Generating 50,000 rows…');
+    setTimeout(() => {
+      const t0 = performance.now();
+      setDatasetA(buildDataset('Stress test — 50,000 rows', makeSample(50000, { seed: 99 })));
+      toast('50,000 rows ready in ' + Math.round(performance.now() - t0) + ' ms');
+    }, 30);
+  });
+  $('#btn-sample-b').addEventListener('click', () => {
+    setDatasetB(buildDataset('Sample — after improvement', makeSample(2400, { seed: 777, shift: true, shiftMean: -0.15 })));
+  });
+  $('#btn-split').addEventListener('click', splitDatasetA);
+  $('#btn-template').addEventListener('click', () => {
+    const header = ['Timestamp', 'Lot', 'Wafer', 'Unit', 'Tool'].concat(PARAMS.map(p => p.key));
+    const rows = [header];
+    for (let i = 0; i < 3; i++) rows.push(['2026-07-27 08:0' + i + ':00', 'LOT-001', 'W01', i + 1, 'BUMP-01'].concat(PARAMS.map(() => '')));
+    downloadText('spc-data-template.csv', toCSV(rows));
+  });
+
+  ['#map-value', '#map-group', '#map-order', '#map-filter', '#map-filter-val'].forEach(sel => {
+    $(sel).addEventListener('change', () => {
+      APP.map.value = $('#map-value').value;
+      APP.map.group = $('#map-group').value;
+      APP.map.order = $('#map-order').value;
+      APP.map.filter = $('#map-filter').value;
+      APP.map.filterVal = $('#map-filter-val').value;
+      if (sel === '#map-filter') { syncFilterValues(); APP.map.filterVal = ''; }
+      if (sel === '#map-value') { loadSpecInputs(); renderPreview(); }
+      refresh();
+    });
+  });
+  ['#spec-lsl', '#spec-usl', '#spec-tgt', '#spec-unit'].forEach(sel => {
+    $(sel).addEventListener('input', () => { readSpecInputs(); refresh(); });
+  });
+  $('#btn-spec-suggest').addEventListener('click', () => {
+    const res = APP.cache || analyze(APP.A, {});
+    if (!res) return toast('Load data first.', true);
+    $('#spec-lsl').value = Number((res.mean - 4 * res.sd).toFixed(4));
+    $('#spec-usl').value = Number((res.mean + 4 * res.sd).toFixed(4));
+    $('#spec-tgt').value = Number(res.mean.toFixed(4));
+    readSpecInputs(); refresh();
+    toast('Filled limits from the data. Replace them with your real spec before reporting.');
+  });
+  $('#btn-spec-clear').addEventListener('click', () => {
+    $('#spec-lsl').value = ''; $('#spec-usl').value = ''; $('#spec-tgt').value = '';
+    readSpecInputs(); refresh();
+  });
+
+  ['#cfg-sub', '#cfg-lambda', '#cfg-k', '#cfg-h', '#cfg-zones'].forEach(sel => {
+    $(sel).addEventListener('input', () => {
+      APP.cfg.sub = Number($('#cfg-sub').value) || 5;
+      APP.cfg.lambda = Math.min(1, Math.max(0.05, Number($('#cfg-lambda').value) || 0.2));
+      APP.cfg.k = Number($('#cfg-k').value) || 0.5;
+      APP.cfg.h = Number($('#cfg-h').value) || 4;
+      APP.cfg.zones = $('#cfg-zones').value;
+      refresh();
+    });
+  });
+
+  $('#btn-rules-all').addEventListener('click', () => { RULES.forEach(r => { APP.rules[r.id] = true; }); refresh(); });
+  $('#btn-rules-none').addEventListener('click', () => { RULES.forEach(r => { APP.rules[r.id] = false; }); refresh(); });
+  $('#btn-rules-std').addEventListener('click', () => {
+    RULES.forEach(r => { APP.rules[r.id] = [1, 2, 5, 6].indexOf(r.id) >= 0; });
+    refresh();
+  });
+  $('#btn-viol-export').addEventListener('click', () => {
+    const res = APP.cache;
+    if (!res || !res.hits.size) return toast('Nothing to export.', true);
+    const rows = [['Point', 'Label', 'Value', 'Z (sigma)', 'Rules', 'Out of spec']];
+    const entries = [];
+    res.hits.forEach((ids, i) => entries.push([i, ids]));
+    entries.sort((a, b) => a[0] - b[0]);
+    entries.forEach(([i, ids]) => {
+      const v = res.values[i];
+      const oos = (res.spec.lsl !== null && v < res.spec.lsl) ? 'Below LSL' : ((res.spec.usl !== null && v > res.spec.usl) ? 'Above USL' : '');
+      rows.push([i + 1, res.series.labels[i], v, ((v - res.mean) / (res.sigmaWithin || 1)).toFixed(3), ids.join(' '), oos]);
+    });
+    downloadText('violations-' + res.valueCol.replace(/[^\w]+/g, '-').toLowerCase() + '.csv', toCSV(rows));
+  });
+
+  $('#btn-doe-run').addEventListener('click', runDOE);
+  ['#doe-ia', '#doe-ib'].forEach(s => $(s).addEventListener('change', () => {
+    if (!$('#doe-out').hidden) drawInteraction($('#doe-resp').value);
+  }));
+  $('#dg-k').addEventListener('input', refreshDesignControls);
+  $('#btn-dg').addEventListener('click', generateDesign);
+  $('#btn-dg-export').addEventListener('click', exportDesign);
+
+  ['#fc-win', '#fc-ahead', '#fc-goal'].forEach(s => $(s).addEventListener('input', () => {
+    if (currentView() === 'forecast') renderForecast(APP.cache);
+  }));
+
+  APP.fmea = FMEA_SEED.map(r => Object.assign({}, r));
+  $('#btn-fmea-add').addEventListener('click', () => {
+    APP.fmea.push({ item: '', mode: 'New failure mode', effect: '', cause: '', ctrl: '', param: APP.map.value || '', action: '', s: 5, o: 5, d: 5 });
+    renderFMEA();
+  });
+  $('#btn-fmea-sort').addEventListener('click', () => {
+    APP.fmea.sort((a, b) => (b.s * b.o * b.d) - (a.s * a.o * a.d));
+    renderFMEA();
+    toast('Sorted by RPN, highest first.');
+  });
+  $('#btn-fmea-export').addEventListener('click', exportFMEA);
+  $('#btn-fmea-reset').addEventListener('click', () => {
+    APP.fmea = FMEA_SEED.map(r => Object.assign({}, r));
+    renderFMEA();
+    toast('Worksheet reset to the seeded failure modes.');
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.altKey && e.key >= '1' && e.key <= '8') {
+      const views = ['data', 'charts', 'cap', 'rules', 'doe', 'compare', 'forecast', 'fmea'];
+      showView(views[Number(e.key) - 1]);
+      e.preventDefault();
+    }
+  });
+
+  refreshDesignControls();
+  renderFMEA();
+
+  if (typeof Chart === 'undefined') {
+    toast('Charts could not load from the CDN. Tables and statistics still work; reconnect and reload for charts.', true);
+  }
+  // Start with the sample so the app is usable immediately.
+  setDatasetA(buildDataset('Sample — advanced packaging line', makeSample(2400)));
+  showView('data');
+}
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>
