@@ -327,13 +327,13 @@ td.txt,th.txt{font-family:var(--body)}
       <div class="sub">Advanced Packaging · PI</div>
     </div>
     <nav class="nav" id="nav">
-      <button data-view="data" class="on"><span class="idx">01</span>Data &amp; limits</button>
-      <button data-view="charts"><span class="idx">02</span>Control charts</button>
+      <button data-view="data" class="on"><span class="idx">01</span>Data &amp; Limits</button>
+      <button data-view="charts"><span class="idx">02</span>Control Charts</button>
       <button data-view="cap"><span class="idx">03</span>Capability</button>
-      <button data-view="rules"><span class="idx">04</span>Rule violations</button>
+      <button data-view="rules"><span class="idx">04</span>Rule Violations</button>
       <button data-view="doe"><span class="idx">05</span>DOE</button>
-      <button data-view="compare"><span class="idx">06</span>Before vs after</button>
-      <button data-view="forecast"><span class="idx">07</span>Trend &amp; roadmap</button>
+      <button data-view="compare"><span class="idx">06</span>Before vs After</button>
+      <button data-view="forecast"><span class="idx">07</span>Trend &amp; Roadmap</button>
       <button data-view="fmea"><span class="idx">08</span>FMEA</button>
     </nav>
     <div class="rail-foot"><span class="dot"></span>Runs entirely in this browser. Files are never uploaded.</div>
@@ -344,66 +344,66 @@ td.txt,th.txt{font-family:var(--body)}
       <div class="ro grow"><div class="k">Parameter</div><div class="v trim" id="ro-param">—</div></div>
       <div class="ro"><div class="k">Points</div><div class="v" id="ro-n">0</div></div>
       <div class="ro"><div class="k">Mean</div><div class="v" id="ro-mean">—</div></div>
-      <div class="ro"><div class="k">Sigma (within)</div><div class="v" id="ro-sigma">—</div></div>
+      <div class="ro"><div class="k">Sigma (Within)</div><div class="v" id="ro-sigma">—</div></div>
       <div class="ro"><div class="k">Cpk</div><div class="v" id="ro-cpk">—</div></div>
-      <div class="ro"><div class="k">Out of control</div><div class="v" id="ro-ooc">—</div></div>
+      <div class="ro"><div class="k">Out of Control</div><div class="v" id="ro-ooc">—</div></div>
     </div>
 
     <!-- 01 DATA -->
     <section class="view" id="view-data">
       <div class="page-head">
-        <h2>Data &amp; limits</h2>
+        <h2>Data &amp; Limits</h2>
         <p>Load a CSV or Excel export from your metrology or test data, tell the app which column is which, then set spec limits for the parameter you want to analyze.</p>
       </div>
       <div class="grid g2">
         <div class="panel">
-          <header><h3>Load measurement data</h3><span class="hint" id="load-hint">Nothing loaded yet</span></header>
+          <header><h3>Load Measurement Data</h3><span class="hint" id="load-hint">Nothing loaded yet</span></header>
           <div class="body">
             <div class="drop" id="drop-a" tabindex="0" role="button" aria-label="Choose a CSV or Excel file">
               <input type="file" id="file-a" accept=".csv,.txt,.xlsx,.xls">
-              <h4>Drop a file here, or click to choose</h4>
+              <h4>Drop a File Here, or Click to Choose</h4>
               <p>CSV, XLSX or XLS · one row per measurement · handles 50,000+ rows</p>
             </div>
             <div class="bar" id="load-bar" hidden><i style="width:0"></i></div>
             <div class="row" style="margin-top:14px">
-              <button class="btn primary" id="btn-sample">Load sample dataset</button>
-              <button class="btn ghost" id="btn-stress">Generate 50,000 rows</button>
+              <button class="btn primary" id="btn-sample">Load Sample Dataset</button>
+              <button class="btn ghost" id="btn-stress">Generate 50,000 Rows</button>
               <span class="spacer"></span>
-              <button class="btn ghost sm" id="btn-template">Download blank template</button>
+              <button class="btn ghost sm" id="btn-template">Download Blank Template</button>
             </div>
             <p class="note" style="margin-top:12px">The sample set covers ten advanced packaging parameters across 12 lots and 3 tools, with process factors attached for DOE.</p>
           </div>
         </div>
 
         <div class="panel">
-          <header><h3>Column mapping</h3><span class="hint">Pick what each column means</span></header>
+          <header><h3>Column Mapping</h3><span class="hint">Pick what each column means</span></header>
           <div class="body">
             <div class="grid g2">
-              <label class="fld"><span>Measured parameter</span><select id="map-value"></select></label>
-              <label class="fld"><span>Subgroup / lot (for Xbar-R)</span><select id="map-group"></select></label>
-              <label class="fld"><span>Time or sequence</span><select id="map-order"></select></label>
-              <label class="fld"><span>Filter by (optional)</span><select id="map-filter"></select></label>
+              <label class="fld"><span>Measured Parameter</span><select id="map-value"></select></label>
+              <label class="fld"><span>Subgroup / Lot (for Xbar-R)</span><select id="map-group"></select></label>
+              <label class="fld"><span>Time or Sequence</span><select id="map-order"></select></label>
+              <label class="fld"><span>Filter By (Optional)</span><select id="map-filter"></select></label>
             </div>
-            <label class="fld" id="filter-val-wrap" hidden><span>Keep only</span><select id="map-filter-val"></select></label>
+            <label class="fld" id="filter-val-wrap" hidden><span>Keep Only</span><select id="map-filter-val"></select></label>
           </div>
         </div>
       </div>
 
       <div class="panel">
         <header>
-          <h3>Specification limits</h3>
+          <h3>Specification Limits</h3>
           <span class="hint">Stored per parameter, so switching columns keeps each set of limits</span>
         </header>
         <div class="body">
           <div class="grid g4">
-            <label class="fld"><span>Lower spec limit (LSL)</span><input type="number" id="spec-lsl" step="any" placeholder="none"></label>
+            <label class="fld"><span>Lower Spec Limit (LSL)</span><input type="number" id="spec-lsl" step="any" placeholder="none"></label>
             <label class="fld"><span>Target</span><input type="number" id="spec-tgt" step="any" placeholder="none"></label>
-            <label class="fld"><span>Upper spec limit (USL)</span><input type="number" id="spec-usl" step="any" placeholder="none"></label>
+            <label class="fld"><span>Upper Spec Limit (USL)</span><input type="number" id="spec-usl" step="any" placeholder="none"></label>
             <label class="fld"><span>Units</span><input type="text" id="spec-unit" placeholder="µm"></label>
           </div>
           <div class="row">
-            <button class="btn sm" id="btn-spec-suggest">Suggest from data (mean ± 4σ)</button>
-            <button class="btn sm ghost" id="btn-spec-clear">Clear limits</button>
+            <button class="btn sm" id="btn-spec-suggest">Suggest from Data (Mean ± 4σ)</button>
+            <button class="btn sm ghost" id="btn-spec-clear">Clear Limits</button>
             <span class="spacer"></span>
             <span class="pill cu" id="spec-state">No limits set</span>
           </div>
@@ -411,7 +411,7 @@ td.txt,th.txt{font-family:var(--body)}
       </div>
 
       <div class="panel">
-        <header><h3>Data preview</h3><span class="hint" id="preview-hint">—</span></header>
+        <header><h3>Data Preview</h3><span class="hint" id="preview-hint">—</span></header>
         <div class="body tight"><div class="tbl-wrap" id="preview"><div class="empty">Load a file or the sample dataset to begin.</div></div></div>
       </div>
     </section>
@@ -419,37 +419,37 @@ td.txt,th.txt{font-family:var(--body)}
     <!-- 02 CHARTS -->
     <section class="view" id="view-charts" hidden>
       <div class="page-head">
-        <h2>Control charts</h2>
+        <h2>Control Charts</h2>
         <p>Zone lines mark ±1σ, ±2σ and ±3σ around the center line. Sigma is estimated from the average moving range (MR&#772;/1.128) so it reflects short-term, within-process variation.</p>
       </div>
       <div class="panel">
         <header>
-          <h3>Chart settings</h3>
+          <h3>Chart Settings</h3>
           <div class="row">
-            <label class="fld" style="margin:0"><span>Subgroup size (Xbar-R)</span><input type="number" id="cfg-sub" min="2" max="25" value="5" style="width:90px"></label>
-            <label class="fld" style="margin:0"><span>EWMA lambda</span><input type="number" id="cfg-lambda" min="0.05" max="1" step="0.05" value="0.2" style="width:90px"></label>
+            <label class="fld" style="margin:0"><span>Subgroup Size (Xbar-R)</span><input type="number" id="cfg-sub" min="2" max="25" value="5" style="width:90px"></label>
+            <label class="fld" style="margin:0"><span>EWMA Lambda</span><input type="number" id="cfg-lambda" min="0.05" max="1" step="0.05" value="0.2" style="width:90px"></label>
             <label class="fld" style="margin:0"><span>CUSUM k (σ)</span><input type="number" id="cfg-k" min="0.1" max="2" step="0.1" value="0.5" style="width:90px"></label>
             <label class="fld" style="margin:0"><span>CUSUM h (σ)</span><input type="number" id="cfg-h" min="1" max="10" step="0.5" value="4" style="width:90px"></label>
             <label class="fld" style="margin:0"><span>Show</span>
               <select id="cfg-zones" style="width:170px">
-                <option value="bands">Shaded zones</option>
-                <option value="lines">Zone lines only</option>
-                <option value="none">Control limits only</option>
+                <option value="bands">Shaded Zones</option>
+                <option value="lines">Zone Lines Only</option>
+                <option value="none">Control Limits Only</option>
               </select>
             </label>
           </div>
         </header>
       </div>
-      <div class="panel"><header><h3>Individuals (I) chart</h3><span class="hint" id="i-hint">—</span></header>
+      <div class="panel"><header><h3>Individuals (I) Chart</h3><span class="hint" id="i-hint">—</span></header>
         <div class="body"><div class="chart-box tall"><canvas id="c-i"></canvas></div>
         <div class="chart-note">
           <span class="legend-key"><i style="border-color:#0068B5"></i>Measurement</span>
-          <span class="legend-key"><i style="border-color:#E96115"></i>Center line</span>
-          <span class="legend-key"><i style="border-color:#C8102E"></i>Control limits (±3σ)</span>
-          <span class="legend-key"><i style="border-color:#653171;border-top-style:dashed"></i>Spec limits</span>
+          <span class="legend-key"><i style="border-color:#E96115"></i>Center Line</span>
+          <span class="legend-key"><i style="border-color:#C8102E"></i>Control Limits (±3σ)</span>
+          <span class="legend-key"><i style="border-color:#653171;border-top-style:dashed"></i>Spec Limits</span>
         </div></div>
       </div>
-      <div class="panel"><header><h3>Moving range (MR) chart</h3><span class="hint" id="mr-hint">—</span></header>
+      <div class="panel"><header><h3>Moving Range (MR) Chart</h3><span class="hint" id="mr-hint">—</span></header>
         <div class="body"><div class="chart-box"><canvas id="c-mr"></canvas></div></div>
       </div>
       <div class="grid g2">
@@ -459,9 +459,9 @@ td.txt,th.txt{font-family:var(--body)}
           <div class="body"><div class="chart-box"><canvas id="c-ewma"></canvas></div></div></div>
       </div>
       <div class="grid g2">
-        <div class="panel"><header><h3>Xbar chart</h3><span class="hint" id="xbar-hint">—</span></header>
+        <div class="panel"><header><h3>Xbar Chart</h3><span class="hint" id="xbar-hint">—</span></header>
           <div class="body"><div class="chart-box"><canvas id="c-xbar"></canvas></div></div></div>
-        <div class="panel"><header><h3>R chart</h3><span class="hint" id="r-hint">—</span></header>
+        <div class="panel"><header><h3>R Chart</h3><span class="hint" id="r-hint">—</span></header>
           <div class="body"><div class="chart-box"><canvas id="c-r"></canvas></div></div></div>
       </div>
     </section>
@@ -469,19 +469,19 @@ td.txt,th.txt{font-family:var(--body)}
     <!-- 03 CAPABILITY -->
     <section class="view" id="view-cap" hidden>
       <div class="page-head">
-        <h2>Process capability</h2>
+        <h2>Process Capability</h2>
         <p>Cp and Cpk use within-subgroup sigma (short-term). Pp and Ppk use the overall sample standard deviation (long-term, what the customer actually sees).</p>
       </div>
       <div class="panel"><header><h3>Indices</h3><span class="hint" id="cap-hint">—</span></header>
         <div class="body"><div class="metrics" id="cap-metrics"></div></div>
       </div>
       <div class="grid g2">
-        <div class="panel"><header><h3>Distribution vs specification</h3></header>
+        <div class="panel"><header><h3>Distribution vs Specification</h3></header>
           <div class="body"><div class="chart-box tall"><canvas id="c-hist"></canvas></div></div></div>
-        <div class="panel"><header><h3>Descriptive statistics</h3></header>
+        <div class="panel"><header><h3>Descriptive Statistics</h3></header>
           <div class="body tight"><div class="tbl-wrap" style="max-height:400px"><table id="tbl-desc"></table></div></div></div>
       </div>
-      <div class="panel"><header><h3>Capability by subgroup</h3><span class="hint">Cpk computed within each lot or subgroup, using the current spec limits</span></header>
+      <div class="panel"><header><h3>Capability by Subgroup</h3><span class="hint">Cpk computed within each lot or subgroup, using the current spec limits</span></header>
         <div class="body"><div class="chart-box"><canvas id="c-capgrp"></canvas></div></div>
       </div>
     </section>
@@ -489,19 +489,19 @@ td.txt,th.txt{font-family:var(--body)}
     <!-- 04 RULES -->
     <section class="view" id="view-rules" hidden>
       <div class="page-head">
-        <h2>Western Electric rule violations</h2>
+        <h2>Western Electric Rule Violations</h2>
         <p>Turn rules on or off to match your site's SPC procedure. Counts and the flagged-point overlay on the I chart update immediately.</p>
       </div>
-      <div class="panel"><header><h3>Rule set</h3>
-        <div class="row"><button class="btn sm ghost" id="btn-rules-all">Enable all</button><button class="btn sm ghost" id="btn-rules-none">Disable all</button><button class="btn sm ghost" id="btn-rules-std">Standard 4</button></div>
+      <div class="panel"><header><h3>Rule Set</h3>
+        <div class="row"><button class="btn sm ghost" id="btn-rules-all">Enable All</button><button class="btn sm ghost" id="btn-rules-none">Disable All</button><button class="btn sm ghost" id="btn-rules-std">Standard 4</button></div>
       </header>
         <div class="body"><div class="grid g2" id="rule-list"></div></div>
       </div>
-      <div class="panel"><header><h3>Individuals chart with flagged points</h3><span class="hint" id="irules-hint">—</span></header>
+      <div class="panel"><header><h3>Individuals Chart with Flagged Points</h3><span class="hint" id="irules-hint">—</span></header>
         <div class="body"><div class="chart-box tall"><canvas id="c-i-rules"></canvas></div></div>
       </div>
-      <div class="panel"><header><h3>Flagged points</h3><span class="hint" id="viol-hint">—</span>
-        <button class="btn sm ghost" id="btn-viol-export">Export violations (CSV)</button>
+      <div class="panel"><header><h3>Flagged Points</h3><span class="hint" id="viol-hint">—</span>
+        <button class="btn sm ghost" id="btn-viol-export">Export Violations (CSV)</button>
       </header>
         <div class="body tight"><div class="tbl-wrap" id="viol-table"><div class="empty">No violations to show.</div></div></div>
       </div>
@@ -510,44 +510,44 @@ td.txt,th.txt{font-family:var(--body)}
     <!-- 05 DOE -->
     <section class="view" id="view-doe" hidden>
       <div class="page-head">
-        <h2>Design of experiments</h2>
+        <h2>Design of Experiments</h2>
         <p>Analyze factors already present in your data, or generate a fresh full or fractional factorial design to run on the line.</p>
       </div>
-      <div class="panel"><header><h3>Analyze factors in the loaded data</h3><span class="hint">Pick a response and up to six factor columns</span></header>
+      <div class="panel"><header><h3>Analyze Factors in the Loaded Data</h3><span class="hint">Pick a response and up to six factor columns</span></header>
         <div class="body">
           <div class="grid g2">
             <label class="fld"><span>Response</span><select id="doe-resp"></select></label>
-            <label class="fld"><span>Factors (ctrl-click for several)</span><select id="doe-factors" multiple size="6"></select></label>
+            <label class="fld"><span>Factors (Ctrl-Click for Several)</span><select id="doe-factors" multiple size="6"></select></label>
           </div>
-          <div class="row"><button class="btn primary" id="btn-doe-run">Run analysis</button>
-            <label class="fld" style="margin:0"><span>Interaction plot</span>
+          <div class="row"><button class="btn primary" id="btn-doe-run">Run Analysis</button>
+            <label class="fld" style="margin:0"><span>Interaction Plot</span>
               <div class="row" style="gap:6px"><select id="doe-ia" style="width:150px"></select><select id="doe-ib" style="width:150px"></select></div>
             </label>
           </div>
         </div>
       </div>
       <div class="panel" id="doe-out" hidden>
-        <header><h3>Main effects</h3><span class="hint" id="doe-hint">—</span></header>
+        <header><h3>Main Effects</h3><span class="hint" id="doe-hint">—</span></header>
         <div class="body"><div class="grid g3" id="doe-charts"></div></div>
       </div>
       <div class="grid g2">
-        <div class="panel" id="doe-pareto-panel" hidden><header><h3>Effect size (Pareto)</h3></header>
+        <div class="panel" id="doe-pareto-panel" hidden><header><h3>Effect Size (Pareto)</h3></header>
           <div class="body"><div class="chart-box"><canvas id="c-pareto"></canvas></div></div></div>
         <div class="panel" id="doe-ia-panel" hidden><header><h3>Interaction</h3><span class="hint" id="ia-hint">—</span></header>
           <div class="body"><div class="chart-box"><canvas id="c-ia"></canvas></div></div></div>
       </div>
-      <div class="panel"><header><h3>Design generator</h3><span class="hint">Build a run sheet before you go to the line</span></header>
+      <div class="panel"><header><h3>Design Generator</h3><span class="hint">Build a run sheet before you go to the line</span></header>
         <div class="body">
           <div class="grid g4">
-            <label class="fld"><span>Number of factors (k)</span><input type="number" id="dg-k" min="2" max="7" value="4"></label>
+            <label class="fld"><span>Number of Factors (k)</span><input type="number" id="dg-k" min="2" max="7" value="4"></label>
             <label class="fld"><span>Design</span><select id="dg-type"></select></label>
-            <label class="fld"><span>Center points</span><input type="number" id="dg-center" min="0" max="10" value="0"></label>
+            <label class="fld"><span>Center Points</span><input type="number" id="dg-center" min="0" max="10" value="0"></label>
             <label class="fld"><span>Replicates</span><input type="number" id="dg-rep" min="1" max="5" value="1"></label>
           </div>
           <div id="dg-names" class="grid g4"></div>
           <div class="row" style="margin-top:6px">
-            <button class="btn primary" id="btn-dg">Generate design</button>
-            <button class="btn ghost" id="btn-dg-export">Download run sheet (CSV)</button>
+            <button class="btn primary" id="btn-dg">Generate Design</button>
+            <button class="btn ghost" id="btn-dg-export">Download Run Sheet (CSV)</button>
             <span class="spacer"></span><span class="pill" id="dg-res">—</span>
           </div>
           <div class="tbl-wrap" style="margin-top:14px;max-height:420px" id="dg-table"><div class="empty">No design generated yet.</div></div>
@@ -558,20 +558,20 @@ td.txt,th.txt{font-family:var(--body)}
     <!-- 06 COMPARE -->
     <section class="view" id="view-compare" hidden>
       <div class="page-head">
-        <h2>Before vs after</h2>
+        <h2>Before vs After</h2>
         <p>Load a second file — a later split, a different tool, or post-improvement data — and compare violation counts, capability and centering against the first.</p>
       </div>
       <div class="grid g2">
-        <div class="panel"><header><h3>Before (dataset A)</h3><span class="pill cu" id="cmp-a-name">—</span></header>
+        <div class="panel"><header><h3>Before (Dataset A)</h3><span class="pill cu" id="cmp-a-name">—</span></header>
           <div class="body"><p class="note">This is whatever is loaded on the Data screen.</p></div></div>
-        <div class="panel"><header><h3>After (dataset B)</h3><span class="pill" id="cmp-b-name">Not loaded</span></header>
+        <div class="panel"><header><h3>After (Dataset B)</h3><span class="pill" id="cmp-b-name">Not Loaded</span></header>
           <div class="body">
             <div class="drop" id="drop-b" tabindex="0" role="button" aria-label="Choose the after file">
               <input type="file" id="file-b" accept=".csv,.txt,.xlsx,.xls">
-              <h4>Drop the "after" file here</h4>
+              <h4>Drop the "After" File Here</h4>
               <p>Must contain the same parameter column name</p>
             </div>
-            <div class="row" style="margin-top:12px"><button class="btn sm" id="btn-sample-b">Use shifted sample data</button><button class="btn sm ghost" id="btn-split">Split dataset A in half</button></div>
+            <div class="row" style="margin-top:12px"><button class="btn sm" id="btn-sample-b">Use Shifted Sample Data</button><button class="btn sm ghost" id="btn-split">Split Dataset A in Half</button></div>
           </div></div>
       </div>
       <div class="panel"><header><h3>Comparison</h3><span class="hint" id="cmp-hint">—</span></header>
@@ -579,29 +579,29 @@ td.txt,th.txt{font-family:var(--body)}
       </div>
       <div class="grid g2">
         <div class="panel"><header><h3>Distributions</h3></header><div class="body"><div class="chart-box"><canvas id="c-cmp-hist"></canvas></div></div></div>
-        <div class="panel"><header><h3>Capability shift</h3></header><div class="body"><div class="chart-box"><canvas id="c-cmp-bar"></canvas></div></div></div>
+        <div class="panel"><header><h3>Capability Shift</h3></header><div class="body"><div class="chart-box"><canvas id="c-cmp-bar"></canvas></div></div></div>
       </div>
     </section>
 
     <!-- 07 FORECAST -->
     <section class="view" id="view-forecast" hidden>
       <div class="page-head">
-        <h2>Trend &amp; capability roadmap</h2>
+        <h2>Trend &amp; Capability Roadmap</h2>
         <p>Rolling capability is fit with a least-squares trend and projected forward. The roadmap works backwards from a Cpk goal to the variation reduction it would take to get there.</p>
       </div>
       <div class="panel"><header><h3>Settings</h3>
         <div class="row">
-          <label class="fld" style="margin:0"><span>Rolling window</span><input type="number" id="fc-win" min="20" max="2000" value="100" style="width:100px"></label>
-          <label class="fld" style="margin:0"><span>Windows to project</span><input type="number" id="fc-ahead" min="1" max="50" value="8" style="width:100px"></label>
-          <label class="fld" style="margin:0"><span>Cpk goal</span><input type="number" id="fc-goal" min="0.5" max="4" step="0.05" value="1.67" style="width:100px"></label>
+          <label class="fld" style="margin:0"><span>Rolling Window</span><input type="number" id="fc-win" min="20" max="2000" value="100" style="width:100px"></label>
+          <label class="fld" style="margin:0"><span>Windows to Project</span><input type="number" id="fc-ahead" min="1" max="50" value="8" style="width:100px"></label>
+          <label class="fld" style="margin:0"><span>Cpk Goal</span><input type="number" id="fc-goal" min="0.5" max="4" step="0.05" value="1.67" style="width:100px"></label>
         </div>
       </header></div>
-      <div class="panel"><header><h3>Rolling Cpk with projection</h3><span class="hint" id="fc-hint">—</span></header>
+      <div class="panel"><header><h3>Rolling Cpk with Projection</h3><span class="hint" id="fc-hint">—</span></header>
         <div class="body"><div class="chart-box tall"><canvas id="c-fc"></canvas></div></div>
       </div>
       <div class="grid g2">
-        <div class="panel"><header><h3>Mean and sigma drift</h3></header><div class="body"><div class="chart-box"><canvas id="c-drift"></canvas></div></div></div>
-        <div class="panel"><header><h3>Variation reduction roadmap</h3><span class="hint">What it takes to reach the goal</span></header>
+        <div class="panel"><header><h3>Mean and Sigma Drift</h3></header><div class="body"><div class="chart-box"><canvas id="c-drift"></canvas></div></div></div>
+        <div class="panel"><header><h3>Variation Reduction Roadmap</h3><span class="hint">What it takes to reach the goal</span></header>
           <div class="body tight"><div class="tbl-wrap" id="fc-road" style="max-height:340px"><div class="empty">Set spec limits to build a roadmap.</div></div></div></div>
       </div>
     </section>
@@ -609,24 +609,24 @@ td.txt,th.txt{font-family:var(--body)}
     <!-- 08 FMEA -->
     <section class="view" id="view-fmea" hidden>
       <div class="page-head">
-        <h2>Failure mode and effects analysis</h2>
+        <h2>Failure Mode and Effects Analysis</h2>
         <p>Severity, occurrence and detection are scored 1–10. RPN updates as you type. Rows start seeded with common advanced packaging failure modes — edit them to match your process.</p>
       </div>
-      <div class="panel"><header><h3>Risk summary</h3><span class="hint" id="fmea-hint">—</span></header>
+      <div class="panel"><header><h3>Risk Summary</h3><span class="hint" id="fmea-hint">—</span></header>
         <div class="body"><div class="metrics" id="fmea-metrics"></div></div>
       </div>
       <div class="panel">
-        <header><h3>FMEA worksheet</h3>
+        <header><h3>FMEA Worksheet</h3>
           <div class="row">
-            <button class="btn sm primary" id="btn-fmea-add">Add row</button>
+            <button class="btn sm primary" id="btn-fmea-add">Add Row</button>
             <button class="btn sm ghost" id="btn-fmea-sort">Sort by RPN</button>
             <button class="btn sm ghost" id="btn-fmea-export">Export (CSV)</button>
-            <button class="btn sm ghost" id="btn-fmea-reset">Reset to defaults</button>
+            <button class="btn sm ghost" id="btn-fmea-reset">Reset to Defaults</button>
           </div>
         </header>
         <div class="body tight"><div class="tbl-wrap" style="max-height:none" id="fmea-table"></div></div>
       </div>
-      <div class="panel"><header><h3>Top risks</h3></header><div class="body"><div class="chart-box"><canvas id="c-fmea"></canvas></div></div></div>
+      <div class="panel"><header><h3>Top Risks</h3></header><div class="body"><div class="chart-box"><canvas id="c-fmea"></canvas></div></div></div>
     </section>
   </div>
 </div>
@@ -1000,18 +1000,18 @@ function populateMapping() {
   const ds = APP.A; if (!ds) return;
   const val = APP.map.value && ds.numeric.indexOf(APP.map.value) >= 0 ? APP.map.value : guessValueColumn(ds);
   APP.map.value = val;
-  fillSelect($('#map-value'), ds.numeric, val, ds.numeric.length ? null : '(no numeric columns found)');
+  fillSelect($('#map-value'), ds.numeric, val, ds.numeric.length ? null : '(No Numeric Columns Found)');
   const grp = ds.categorical.filter(c => c !== val);
   const guessGrp = APP.map.group && grp.indexOf(APP.map.group) >= 0 ? APP.map.group :
     (grp.find(c => /lot|batch|wafer|group|subgroup/i.test(c)) || '');
   APP.map.group = guessGrp;
-  fillSelect($('#map-group'), grp, guessGrp, 'Consecutive units of n');
+  fillSelect($('#map-group'), grp, guessGrp, 'Consecutive Units of n');
   const ord = ds.cols.filter(c => c !== val);
   const guessOrd = APP.map.order && ord.indexOf(APP.map.order) >= 0 ? APP.map.order :
     (ord.find(c => /time|date|stamp|seq|order/i.test(c)) || '');
   APP.map.order = guessOrd;
-  fillSelect($('#map-order'), ord, guessOrd, 'Row order in the file');
-  fillSelect($('#map-filter'), ds.categorical, APP.map.filter, 'No filter');
+  fillSelect($('#map-order'), ord, guessOrd, 'Row Order in the File');
+  fillSelect($('#map-filter'), ds.categorical, APP.map.filter, 'No Filter');
   syncFilterValues();
   loadSpecInputs();
 }
@@ -1027,7 +1027,7 @@ function syncFilterValues() {
   }
   seen.sort();
   wrap.hidden = false;
-  fillSelect($('#map-filter-val'), seen, APP.map.filterVal, 'All values');
+  fillSelect($('#map-filter-val'), seen, APP.map.filterVal, 'All Values');
 }
 function defaultSpecFor(name) {
   const p = PARAMS.find(x => x.key === name);
@@ -1060,9 +1060,9 @@ function readSpecInputs() {
 function updateSpecState() {
   const s = currentSpec();
   const el = $('#spec-state');
-  if (s.lsl === null && s.usl === null) { el.textContent = 'No limits set'; el.className = 'pill'; }
-  else if (s.lsl === null || s.usl === null) { el.textContent = 'One-sided limit'; el.className = 'pill cu'; }
-  else { el.textContent = 'Two-sided: ' + fmt(s.lsl, 3) + ' to ' + fmt(s.usl, 3); el.className = 'pill cu'; }
+  if (s.lsl === null && s.usl === null) { el.textContent = 'No Limits Set'; el.className = 'pill'; }
+  else if (s.lsl === null || s.usl === null) { el.textContent = 'One-Sided Limit'; el.className = 'pill cu'; }
+  else { el.textContent = 'Two-Sided: ' + fmt(s.lsl, 3) + ' to ' + fmt(s.usl, 3); el.className = 'pill cu'; }
 }
 
 /* ---------------------------------------------------------------
@@ -1075,7 +1075,7 @@ function renderPreview() {
   const n = Math.min(120, ds.rows.length);
   const cols = ds.cols.slice(0, 18);
   let html = '<table><thead><tr><th>#</th>' + cols.map(c =>
-    '<th class="txt">' + esc(c) + (c === APP.map.value ? ' <span class="pill cu">value</span>' : '') + '</th>').join('') + '</tr></thead><tbody>';
+    '<th class="txt">' + esc(c) + (c === APP.map.value ? ' <span class="pill cu">Value</span>' : '') + '</th>').join('') + '</tr></thead><tbody>';
   for (let i = 0; i < n; i++) {
     const r = ds.rows[i];
     html += '<tr><td style="color:var(--muted)">' + (i + 1) + '</td>' +
@@ -1492,7 +1492,7 @@ function drawIChart(res, canvasId, key) {
   const ds = [seriesLine('Value', pts, C.probe)];
   if (flagged.length) {
     ds.push({
-      label: 'Rule violation', data: flagged, type: 'scatter',
+      label: 'Rule Violation', data: flagged, type: 'scatter',
       borderColor: C.alert, backgroundColor: C.alert, pointRadius: 3.4, pointHoverRadius: 6,
       showLine: false, parsing: false, order: -1
     });
@@ -1524,7 +1524,7 @@ function drawMR(res) {
   const pts = downsample(res.mr);
   makeChart('mr', 'c-mr', {
     type: 'line',
-    data: { datasets: [seriesLine('Moving range', pts, C.warn)] },
+    data: { datasets: [seriesLine('Moving Range', pts, C.warn)] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       scales: baseScales('Observation', 'MR'),
@@ -1555,13 +1555,13 @@ function drawCUSUM(res) {
     type: 'line',
     data: {
       datasets: [
-        seriesLine('CUSUM high', downsample(sp), C.probe),
-        seriesLine('CUSUM low', downsample(sm), C.cu)
+        seriesLine('CUSUM High', downsample(sp), C.probe),
+        seriesLine('CUSUM Low', downsample(sm), C.cu)
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      scales: baseScales('Observation', 'Cumulative sum (σ)'),
+      scales: baseScales('Observation', 'Cumulative Sum (σ)'),
       plugins: {
         tooltip: tooltipFor(null, 'σ'),
         zones: { cl: 0, sigma: 0, mode: 'none', showLimits: false, usl: h, lsl: -h, uslLabel: '+h', lslLabel: '−h', specColor: C.alert }
@@ -1588,8 +1588,8 @@ function drawEWMA(res) {
     data: {
       datasets: [
         seriesLine('EWMA', downsample(z), C.probe),
-        seriesLine('Upper limit', downsample(up), 'rgba(200,16,46,.7)', { pointRadius: 0, borderDash: [4, 3] }),
-        seriesLine('Lower limit', downsample(lo), 'rgba(200,16,46,.7)', { pointRadius: 0, borderDash: [4, 3] })
+        seriesLine('Upper Limit', downsample(up), 'rgba(200,16,46,.7)', { pointRadius: 0, borderDash: [4, 3] }),
+        seriesLine('Lower Limit', downsample(lo), 'rgba(200,16,46,.7)', { pointRadius: 0, borderDash: [4, 3] })
       ]
     },
     options: {
@@ -1621,7 +1621,7 @@ function drawXbarR(res) {
 
   makeChart('xbar', 'c-xbar', {
     type: 'line',
-    data: { datasets: [seriesLine('Subgroup mean', means, C.probe)] },
+    data: { datasets: [seriesLine('Subgroup Mean', means, C.probe)] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       scales: baseScales('Subgroup', 'Mean', labelFn),
@@ -1633,7 +1633,7 @@ function drawXbarR(res) {
   });
   makeChart('r', 'c-r', {
     type: 'line',
-    data: { datasets: [seriesLine('Subgroup range', ranges, C.cu)] },
+    data: { datasets: [seriesLine('Subgroup Range', ranges, C.cu)] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       scales: baseScales('Subgroup', 'Range', labelFn),
@@ -1676,9 +1676,9 @@ function renderCapability(res) {
       metricCard('Cpk', fmt(c.cpk, 2), 'Actual, within-sigma', capClass(c.cpk)),
       metricCard('Pp', fmt(c.pp, 2), 'Potential, overall sigma', capClass(c.pp)),
       metricCard('Ppk', fmt(c.ppk, 2), 'Actual, overall sigma', capClass(c.ppk)),
-      metricCard('Sigma level', fmt(c.sigmaLevel, 2), 'Z.bench ' + fmt(c.zbench, 2) + ' + 1.5 shift', capClass(c.sigmaLevel ? c.sigmaLevel / 3 : null)),
-      metricCard('PPM (predicted)', c.ppm === null ? '—' : (c.ppm < 0.01 ? '&lt;0.01' : fmtInt(c.ppm)), 'Normal model, both tails', c.ppm > 6210 ? 'bad' : (c.ppm > 233 ? 'warn' : 'ok')),
-      metricCard('PPM (observed)', c.ppmObs === null ? '—' : fmtInt(c.ppmObs), 'Actual points outside spec', c.ppmObs > 0 ? 'warn' : 'ok'),
+      metricCard('Sigma Level', fmt(c.sigmaLevel, 2), 'Z.bench ' + fmt(c.zbench, 2) + ' + 1.5 shift', capClass(c.sigmaLevel ? c.sigmaLevel / 3 : null)),
+      metricCard('PPM (Predicted)', c.ppm === null ? '—' : (c.ppm < 0.01 ? '&lt;0.01' : fmtInt(c.ppm)), 'Normal model, both tails', c.ppm > 6210 ? 'bad' : (c.ppm > 233 ? 'warn' : 'ok')),
+      metricCard('PPM (Observed)', c.ppmObs === null ? '—' : fmtInt(c.ppmObs), 'Actual points outside spec', c.ppmObs > 0 ? 'warn' : 'ok'),
       metricCard('Centering', fmt(res.spec.target !== null && res.spec.target !== undefined ? res.mean - res.spec.target : (res.spec.lsl !== null && res.spec.usl !== null ? res.mean - (res.spec.lsl + res.spec.usl) / 2 : null), 3),
         res.spec.target !== null && res.spec.target !== undefined ? 'Mean − target' + unit : 'Mean − spec midpoint' + unit, 'cu')
     ].join('');
@@ -1689,13 +1689,13 @@ function renderCapability(res) {
   // descriptive stats
   const rows = [
     ['Count', fmtInt(res.n)], ['Mean', fmt(res.mean, 4)], ['Median', fmt(res.median, 4)],
-    ['Std dev (overall)', fmt(res.sd, 4)], ['Sigma within (MR̄/1.128)', fmt(res.sigmaWithin, 4)],
-    ['Sigma within (R̄/d2)', fmt(res.sigmaSub, 4)],
+    ['Std Dev (Overall)', fmt(res.sd, 4)], ['Sigma Within (MR̄/1.128)', fmt(res.sigmaWithin, 4)],
+    ['Sigma Within (R̄/d2)', fmt(res.sigmaSub, 4)],
     ['Minimum', fmt(res.min, 4)], ['Q1', fmt(res.q1, 4)], ['Q3', fmt(res.q3, 4)], ['Maximum', fmt(res.max, 4)],
-    ['Range', fmt(res.max - res.min, 4)], ['Skewness', fmt(res.skew, 3)], ['Kurtosis (excess)', fmt(res.kurt, 3)],
+    ['Range', fmt(res.max - res.min, 4)], ['Skewness', fmt(res.skew, 3)], ['Kurtosis (Excess)', fmt(res.kurt, 3)],
     ['LSL', res.spec.lsl === null || res.spec.lsl === undefined ? 'not set' : fmt(res.spec.lsl, 4)],
     ['USL', res.spec.usl === null || res.spec.usl === undefined ? 'not set' : fmt(res.spec.usl, 4)],
-    ['Rows skipped (blank or non-numeric)', fmtInt(res.series.skipped)]
+    ['Rows Skipped (Blank or Non-Numeric)', fmtInt(res.series.skipped)]
   ];
   $('#tbl-desc').innerHTML = '<thead><tr><th class="txt">Statistic</th><th class="num">Value</th></tr></thead><tbody>' +
     rows.map(r => '<tr><td class="txt">' + esc(r[0]) + '</td><td class="num">' + r[1] + '</td></tr>').join('') + '</tbody>';
@@ -1732,7 +1732,7 @@ function drawHistogram(res) {
     data: {
       datasets: [
         { type: 'bar', label: 'Count', data: bars, backgroundColor: 'rgba(0,104,181,.32)', borderColor: 'rgba(0,104,181,.85)', borderWidth: 1, parsing: false, barPercentage: 1, categoryPercentage: 1, order: 2 },
-        { type: 'line', label: 'Normal fit', data: curve, borderColor: C.cu, borderWidth: 1.5, pointRadius: 0, parsing: false, order: 1 }
+        { type: 'line', label: 'Normal Fit', data: curve, borderColor: C.cu, borderWidth: 1.5, pointRadius: 0, parsing: false, order: 1 }
       ]
     },
     options: {
@@ -1847,7 +1847,7 @@ function renderViolations(res) {
   entries.sort((a, b) => a[0] - b[0]);
   const show = entries.slice(0, 500);
   const unit = res.spec.unit || '';
-  let html = '<table><thead><tr><th>Point</th><th class="txt">Label</th><th class="num">Value' + (unit ? ' (' + esc(unit) + ')' : '') + '</th><th class="num">Z (σ)</th><th class="txt">Rules</th><th class="txt">Out of spec</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Point</th><th class="txt">Label</th><th class="num">Value' + (unit ? ' (' + esc(unit) + ')' : '') + '</th><th class="num">Z (σ)</th><th class="txt">Rules</th><th class="txt">Out of Spec</th></tr></thead><tbody>';
   show.forEach(([i, ids]) => {
     const v = res.values[i];
     const z = (v - res.mean) / (res.sigmaWithin || 1);
@@ -2000,7 +2000,7 @@ function runDOE() {
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
       scales: {
-        x: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: '|effect| on ' + resp, color: C.tick, font: { size: 9 } } },
+        x: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: '|Effect| on ' + resp, color: C.tick, font: { size: 9 } } },
         y: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.text } }
       },
       plugins: { tooltip: { callbacks: { label: it => 'Effect ' + fmt(effects[it.dataIndex].effect, 4) + ' · spread ' + fmt(effects[it.dataIndex].range, 4) } } }
@@ -2090,7 +2090,7 @@ const GENERATORS = {
   '7-4': { res: 'III', gens: [[3, [0, 1]], [4, [0, 2]], [5, [1, 2]], [6, [0, 1, 2]]] }
 };
 function designOptions(k) {
-  const opts = [{ v: '0', t: 'Full factorial 2^' + k + ' (' + Math.pow(2, k) + ' runs)' }];
+  const opts = [{ v: '0', t: 'Full Factorial 2^' + k + ' (' + Math.pow(2, k) + ' runs)' }];
   for (let p = 1; p <= 4; p++) {
     const key = k + '-' + p;
     if (GENERATORS[key] && Math.pow(2, k - p) >= 4) {
@@ -2152,7 +2152,7 @@ function generateDesign() {
   const res = p === 0 ? 'Full' : GENERATORS[k + '-' + p].res;
   $('#dg-res').textContent = all.length + ' runs · resolution ' + res;
   $('#dg-res').className = 'pill ' + (p === 0 || res === 'V' || res === 'VI' || res === 'VII' ? 'ok' : (res === 'IV' ? 'cu' : 'warn'));
-  let html = '<table><thead><tr><th>Run</th><th>Std order</th>' + names.map(n => '<th class="txt">' + esc(n) + '</th>').join('') +
+  let html = '<table><thead><tr><th>Run</th><th>Std Order</th>' + names.map(n => '<th class="txt">' + esc(n) + '</th>').join('') +
     '<th class="txt">Response</th></tr></thead><tbody>';
   all.forEach((row, i) => {
     html += '<tr><td>' + (i + 1) + '</td><td style="color:var(--muted)">' + (i + 1) + '</td>' +
@@ -2206,21 +2206,21 @@ function renderCompare() {
   const rows = [
     ['Points', fmtInt(a.n), fmtInt(b.n), '<td class="num">' + fmtInt(b.n - a.n) + '</td>'],
     ['Mean', fmt(a.mean, 4), fmt(b.mean, 4), deltaCell(a.mean, b.mean, null, 4)],
-    ['Sigma (within)', fmt(a.sigmaWithin, 4), fmt(b.sigmaWithin, 4), deltaCell(a.sigmaWithin, b.sigmaWithin, false, 4)],
-    ['Sigma (overall)', fmt(a.sd, 4), fmt(b.sd, 4), deltaCell(a.sd, b.sd, false, 4)],
+    ['Sigma (Within)', fmt(a.sigmaWithin, 4), fmt(b.sigmaWithin, 4), deltaCell(a.sigmaWithin, b.sigmaWithin, false, 4)],
+    ['Sigma (Overall)', fmt(a.sd, 4), fmt(b.sd, 4), deltaCell(a.sd, b.sd, false, 4)],
     ['Range', fmt(a.max - a.min, 4), fmt(b.max - b.min, 4), deltaCell(a.max - a.min, b.max - b.min, false, 4)],
     ['Cp', fmt(a.cap.cp, 2), fmt(b.cap.cp, 2), deltaCell(a.cap.cp, b.cap.cp, true, 2)],
     ['Cpk', fmt(a.cap.cpk, 2), fmt(b.cap.cpk, 2), deltaCell(a.cap.cpk, b.cap.cpk, true, 2)],
     ['Pp', fmt(a.cap.pp, 2), fmt(b.cap.pp, 2), deltaCell(a.cap.pp, b.cap.pp, true, 2)],
     ['Ppk', fmt(a.cap.ppk, 2), fmt(b.cap.ppk, 2), deltaCell(a.cap.ppk, b.cap.ppk, true, 2)],
-    ['Sigma level', fmt(a.cap.sigmaLevel, 2), fmt(b.cap.sigmaLevel, 2), deltaCell(a.cap.sigmaLevel, b.cap.sigmaLevel, true, 2)],
-    ['PPM (predicted)', a.cap.ppm === null ? '—' : fmtInt(a.cap.ppm), b.cap.ppm === null ? '—' : fmtInt(b.cap.ppm), deltaCell(a.cap.ppm, b.cap.ppm, false, 0)],
-    ['Out-of-control points', fmtInt(a.oocCount), fmtInt(b.oocCount), deltaCell(a.oocCount, b.oocCount, false, 0)],
-    ['Out-of-control rate', fmt(a.oocCount / a.n * 100, 2) + '%', fmt(b.oocCount / b.n * 100, 2) + '%', deltaCell(a.oocCount / a.n * 100, b.oocCount / b.n * 100, false, 2)]
+    ['Sigma Level', fmt(a.cap.sigmaLevel, 2), fmt(b.cap.sigmaLevel, 2), deltaCell(a.cap.sigmaLevel, b.cap.sigmaLevel, true, 2)],
+    ['PPM (Predicted)', a.cap.ppm === null ? '—' : fmtInt(a.cap.ppm), b.cap.ppm === null ? '—' : fmtInt(b.cap.ppm), deltaCell(a.cap.ppm, b.cap.ppm, false, 0)],
+    ['Out-of-Control Points', fmtInt(a.oocCount), fmtInt(b.oocCount), deltaCell(a.oocCount, b.oocCount, false, 0)],
+    ['Out-of-Control Rate', fmt(a.oocCount / a.n * 100, 2) + '%', fmt(b.oocCount / b.n * 100, 2) + '%', deltaCell(a.oocCount / a.n * 100, b.oocCount / b.n * 100, false, 2)]
   ];
   RULES.forEach(r => {
     if (!APP.rules[r.id]) return;
-    rows.push(['Rule ' + r.id + ' hits', fmtInt(a.ruleCounts[r.id]), fmtInt(b.ruleCounts[r.id]), deltaCell(a.ruleCounts[r.id], b.ruleCounts[r.id], false, 0)]);
+    rows.push(['Rule ' + r.id + ' Hits', fmtInt(a.ruleCounts[r.id]), fmtInt(b.ruleCounts[r.id]), deltaCell(a.ruleCounts[r.id], b.ruleCounts[r.id], false, 0)]);
   });
 
   host.innerHTML = '<table><thead><tr><th class="txt">Metric</th><th class="num">Before (A)</th><th class="num">After (B)</th><th class="num">Change</th></tr></thead><tbody>' +
@@ -2259,7 +2259,7 @@ function renderCompare() {
       plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, color: C.text } } },
       scales: {
         x: { stacked: false, grid: { display: false }, border: { color: C.line }, ticks: { color: C.tick, maxTicksLimit: 10 } },
-        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: '% of points', color: C.tick, font: { size: 9 } } }
+        y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: '% of Points', color: C.tick, font: { size: 9 } } }
       }
     }
   });
@@ -2352,7 +2352,7 @@ function renderForecast(res) {
         zones: { cl: goal, sigma: 0, mode: 'none', showLimits: false, clLabel: 'Goal', usl: null, lsl: null, target: null }
       },
       scales: {
-        x: { type: 'linear', grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick, callback: v2 => 'W' + fmtInt(v2 + 1) }, title: { display: true, text: 'Window of ' + win + ' measurements', color: C.tick, font: { size: 9 } } },
+        x: { type: 'linear', grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick, callback: v2 => 'W' + fmtInt(v2 + 1) }, title: { display: true, text: 'Window of ' + win + ' Measurements', color: C.tick, font: { size: 9 } } },
         y: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Cpk', color: C.tick, font: { size: 9 } } }
       }
     }
@@ -2377,8 +2377,8 @@ function renderForecast(res) {
     data: {
       labels: xs.map(i => 'W' + (i + 1)),
       datasets: [
-        { label: 'Window mean', data: means, borderColor: C.cu, backgroundColor: C.cu, borderWidth: 1.75, pointRadius: 2, yAxisID: 'y', tension: .15 },
-        { label: 'Window sigma', data: sds, borderColor: C.warn, backgroundColor: C.warn, borderWidth: 1.75, pointRadius: 2, yAxisID: 'y1', tension: .15 }
+        { label: 'Window Mean', data: means, borderColor: C.cu, backgroundColor: C.cu, borderWidth: 1.75, pointRadius: 2, yAxisID: 'y', tension: .15 },
+        { label: 'Window Sigma', data: sds, borderColor: C.warn, backgroundColor: C.warn, borderWidth: 1.75, pointRadius: 2, yAxisID: 'y1', tension: .15 }
       ]
     },
     options: {
@@ -2419,7 +2419,7 @@ function renderForecast(res) {
     host.innerHTML = '<div class="empty">Cpk is already at or above every milestone. Hold the gains and re-baseline the limits.</div>';
     return;
   }
-  host.innerHTML = '<table><thead><tr><th class="num">Cpk goal</th><th class="num">Sigma needed</th><th class="num">Variation cut</th><th class="num">PPM at goal</th><th class="txt">Path</th></tr></thead><tbody>' +
+  host.innerHTML = '<table><thead><tr><th class="num">Cpk Goal</th><th class="num">Sigma Needed</th><th class="num">Variation Cut</th><th class="num">PPM at Goal</th><th class="txt">Path</th></tr></thead><tbody>' +
     steps.map(s => '<tr><td class="num" style="color:' + C.cu + '">' + fmt(s.goal, 2) + '</td><td class="num">' + fmt(s.sigma, 4) +
       '</td><td class="num">' + fmt(s.reduce, 1) + '%</td><td class="num">' + (s.ppm === null ? '—' : (s.ppm < 0.01 ? '&lt;0.01' : fmtInt(s.ppm))) +
       '</td><td class="txt" style="color:var(--muted)">' + esc(s.centering) + '</td></tr>').join('') +
@@ -2449,8 +2449,8 @@ function rpnClass(r) { return r >= 200 ? 'hi' : (r >= 100 ? 'mid' : 'lo'); }
 function renderFMEA() {
   const host = $('#fmea-table');
   const cols = [
-    ['item', 'Process step', 150], ['mode', 'Failure mode', 190], ['effect', 'Effect', 190],
-    ['cause', 'Cause', 190], ['ctrl', 'Current control', 180], ['param', 'SPC parameter', 160], ['action', 'Recommended action', 200]
+    ['item', 'Process Step', 150], ['mode', 'Failure Mode', 190], ['effect', 'Effect', 190],
+    ['cause', 'Cause', 190], ['ctrl', 'Current Control', 180], ['param', 'SPC Parameter', 160], ['action', 'Recommended Action', 200]
   ];
   let html = '<table><thead><tr><th>#</th>' + cols.map(c => '<th class="txt">' + c[1] + '</th>').join('') +
     '<th class="num">S</th><th class="num">O</th><th class="num">D</th><th class="num">RPN</th><th></th></tr></thead><tbody>';
@@ -2517,12 +2517,12 @@ function renderFMEAsummary() {
   const maxSev = Math.max.apply(null, APP.fmea.map(r => r.s));
   const top = APP.fmea.map((r, i) => ({ r: r, rpn: rpns[i] })).sort((a, b) => b.rpn - a.rpn)[0];
   host.innerHTML = [
-    metricCard('Failure modes', fmtInt(rpns.length), 'Rows in the worksheet', 'cu'),
+    metricCard('Failure Modes', fmtInt(rpns.length), 'Rows in the worksheet', 'cu'),
     metricCard('Highest RPN', fmtInt(Math.max.apply(null, rpns)), top.r.mode, rpnClass(Math.max.apply(null, rpns)) === 'hi' ? 'bad' : 'warn'),
     metricCard('RPN ≥ 200', fmtInt(high), 'Act now', high ? 'bad' : 'ok'),
     metricCard('RPN 100–199', fmtInt(mid), 'Plan mitigation', mid ? 'warn' : 'ok'),
     metricCard('Mean RPN', fmt(ST.mean(rpns), 0), 'Across all rows', ''),
-    metricCard('Max severity', fmtInt(maxSev), 'Severity 9–10 needs action regardless of RPN', maxSev >= 9 ? 'bad' : 'ok')
+    metricCard('Max Severity', fmtInt(maxSev), 'Severity 9–10 needs action regardless of RPN', maxSev >= 9 ? 'bad' : 'ok')
   ].join('');
   $('#fmea-hint').textContent = 'Highest risk: ' + top.r.mode + ' (RPN ' + top.rpn + ')';
 
@@ -2536,14 +2536,14 @@ function renderFMEAsummary() {
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
       scales: {
-        x: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Risk priority number', color: C.tick, font: { size: 9 } } },
+        x: { grid: { color: C.grid }, border: { color: C.line }, ticks: { color: C.tick }, title: { display: true, text: 'Risk Priority Number', color: C.tick, font: { size: 9 } } },
         y: { grid: { display: false }, border: { color: C.line }, ticks: { color: C.text, font: { size: 9.5 } } }
       }
     }
   });
 }
 function exportFMEA() {
-  const rows = [['Process step', 'Failure mode', 'Effect', 'Cause', 'Current control', 'SPC parameter', 'Recommended action', 'Severity', 'Occurrence', 'Detection', 'RPN']];
+  const rows = [['Process Step', 'Failure Mode', 'Effect', 'Cause', 'Current Control', 'SPC Parameter', 'Recommended Action', 'Severity', 'Occurrence', 'Detection', 'RPN']];
   APP.fmea.forEach(r => rows.push([r.item, r.mode, r.effect, r.cause, r.ctrl, r.param, r.action, r.s, r.o, r.d, r.s * r.o * r.d]));
   downloadText('fmea-worksheet.csv', toCSV(rows));
 }
@@ -2681,7 +2681,7 @@ function init() {
   $('#btn-viol-export').addEventListener('click', () => {
     const res = APP.cache;
     if (!res || !res.hits.size) return toast('Nothing to export.', true);
-    const rows = [['Point', 'Label', 'Value', 'Z (sigma)', 'Rules', 'Out of spec']];
+    const rows = [['Point', 'Label', 'Value', 'Z (Sigma)', 'Rules', 'Out of Spec']];
     const entries = [];
     res.hits.forEach((ids, i) => entries.push([i, ids]));
     entries.sort((a, b) => a[0] - b[0]);
@@ -2707,7 +2707,7 @@ function init() {
 
   APP.fmea = FMEA_SEED.map(r => Object.assign({}, r));
   $('#btn-fmea-add').addEventListener('click', () => {
-    APP.fmea.push({ item: '', mode: 'New failure mode', effect: '', cause: '', ctrl: '', param: APP.map.value || '', action: '', s: 5, o: 5, d: 5 });
+    APP.fmea.push({ item: '', mode: 'New Failure Mode', effect: '', cause: '', ctrl: '', param: APP.map.value || '', action: '', s: 5, o: 5, d: 5 });
     renderFMEA();
   });
   $('#btn-fmea-sort').addEventListener('click', () => {
